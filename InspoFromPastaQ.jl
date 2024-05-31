@@ -1,0 +1,110 @@
+using ITensors, ITensorMPS
+import Pkg; Pkg.add("PastaQ") 
+using PastaQ
+import PastaQ: gate
+using ITensorUnicodePlots
+
+# Projective Measurements onto Computational Basis
+gate(::GateName"P0") = [1 0 ; 0 0]
+gate(::GateName"P1") = [0 0 ; 0 1]
+
+# Circuit Creation
+function CircuitCreation(depth::Int, N::Int)
+    Circuit = []
+    for j in 1:depth
+        OddEvenLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 1:2:N-1])
+        EvenOddLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 2:2:N-2])
+        push!(Circuit, [OddEvenLayer, EvenOddLayer])
+    end
+    return Circuit
+end
+
+# Performs a Projective Measurement onto Computational Basis
+function Measurement!(rhoSys::MPO, site::Int)
+    orthogonalize!(rhoSys, site)
+    # I shouldn't have to trace out the other sites because its orthogonalized correct?
+    rhoMeasuring = rhoSys[site]
+    # Grab probabilities from the diagonal
+    probabilities = real.(diag(rhoMeasuring))
+    # Computer randomly decides if it gets projected up or down (based on probability of down)
+    if rand() < probabilities[1]
+        rhoSys = runcircuit(rhoSys, ("P0", site))
+    else 
+        rhoSys = runcircuit(rhoSys, ("P1", site))
+    end
+    return normalize!(rhoSys)
+
+    # Do I need to normalize after measurement??? I would think so but I remember you saying about not normallizing 
+    # and thinking of it as a noise channel
+    # Without normalizing entropy increases, it shouldn't
+end
+
+function RunMonitoredCircuit(circuit::Vector, p::Float64)
+
+    # Number of Qubits
+    N = nqubits(circuit)
+
+    # Produce MPS state then take it's outer product to get MPO state
+    MPSSys = productstate(N)
+    rhoSys = outer(MPSSys', MPSSys)
+
+    # Apply gates and measurements
+    for layer in circuit
+        # Applying Gates
+        rhoSys = runcircuit(rhoSys, layer, cutoff=tol)
+
+        # Possible Measurement
+        # For each qubit, according to a given probability of measurement, measure it. 
+        for i in 1:N
+            if rand() < p
+                rhoSys = Measurement!(rhoSys, i)
+            end
+        end
+    end
+    return rhoSys, SecondRenyiEntropy(rhoSys)
+end
+
+# Help from Forum 
+function MPOTraceOut(rhoSys::MPO)
+    N = length(rhoSys)
+    L = tr(rhoSys[1])
+    subsyscutoff = Int(round(N/2))
+    for i in 2:subsyscutoff
+        L *= rhoSys[i]
+        L = tr(L)
+    end
+
+    rhoSys[subsyscutoff + 1] *= L
+    rhoA = MPO(N-subsyscutoff)
+
+    for i in (subsyscutoff + 1):N
+        rhoA[i-subsyscutoff] = copy(rhoSys[i])
+    end
+    return rhoA
+end
+
+function SecondRenyiEntropy(rhoSys::MPO)
+    rhoA = MPOTraceOut(rhoSys)
+    entropy = -log(tr(apply(rhoA, rhoA)))
+    return entropy
+end
+
+# Setup
+let 
+    # Number of Qubits
+    N = 8
+    # Circuit Depth
+    CircuitDepth = 10
+    # Tolerance
+    global tol = 1e-8
+    # Create Circuit
+    Circuit = CircuitCreation(CircuitDepth, N)
+
+    # Entropy fluctuating at some points (Assuming this is because im only running each circuit once)
+    for p in 0:0.02:0.2
+        rhoSys, avgentropy = RunMonitoredCircuit(Circuit, p)
+        println("Entropy: ", avgentropy)
+    end
+end
+
+
