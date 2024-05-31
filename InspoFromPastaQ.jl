@@ -4,6 +4,8 @@ using PastaQ
 import PastaQ: gate
 using ITensorUnicodePlots
 using Statistics
+import Pkg; Pkg.add("Plots")
+using Plots
 
 # Projective Measurements onto Computational Basis
 gate(::GateName"P0") = [1 0 ; 0 0]
@@ -103,10 +105,12 @@ let
     # Number of trials
     ntrials = 50
     # Average Entropy Array per p
-    AvgEntropyArray = []
+    global AvgEntropyArray = []
+    # Measurement probabilities
+    global problist = [i for i in 0:0.02:0.2]
 
     # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
-    for p in 0:0.02:0.2
+    for p in problist
         entropytrialarray = [] 
         @time for _ in 1:ntrials
             rhoSys, entropy = RunMonitoredCircuit(Circuit, p)
@@ -119,3 +123,7 @@ let
         println("Entropy: ", avgentropy)
     end
 end
+
+scatter(problist, real.(AvgEntropyArray))
+xlabel!("p")
+ylabel!("Avergae Entropy")
