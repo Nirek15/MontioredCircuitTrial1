@@ -3,6 +3,7 @@ import Pkg; Pkg.add("PastaQ")
 using PastaQ
 import PastaQ: gate
 using ITensorUnicodePlots
+using Statistics
 
 # Projective Measurements onto Computational Basis
 gate(::GateName"P0") = [1 0 ; 0 0]
@@ -99,12 +100,22 @@ let
     global tol = 1e-8
     # Create Circuit
     Circuit = CircuitCreation(CircuitDepth, N)
+    # Number of trials
+    ntrials = 50
+    # Average Entropy Array per p
+    AvgEntropyArray = []
 
-    # Entropy fluctuating at some points (Assuming this is because im only running each circuit once)
+    # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
     for p in 0:0.02:0.2
-        rhoSys, avgentropy = RunMonitoredCircuit(Circuit, p)
+        entropytrialarray = [] 
+        @time for _ in 1:ntrials
+            rhoSys, entropy = RunMonitoredCircuit(Circuit, p)
+            push!(entropytrialarray, entropy)
+        end
+        push!(AvgEntropyArray, mean(entropytrialarray))
+    end
+
+    for avgentropy in AvgEntropyArray
         println("Entropy: ", avgentropy)
     end
 end
-
-
