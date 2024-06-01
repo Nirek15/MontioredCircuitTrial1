@@ -107,7 +107,9 @@ let
     # Average Entropy Array per p
     global AvgEntropyArray = []
     # Measurement probabilities
-    global problist = [i for i in 0:0.02:0.2]
+    global problist = LinRange(0, 1, 10)
+    # List to hold each size iteration
+    global BigEntropyList = []
 
     # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
     for p in problist
@@ -124,6 +126,7 @@ let
     end
 end
 
-scatter(problist, real.(AvgEntropyArray))
+plot(problist, real.(AvgEntropyArray))
+scatter!(problist, real.(AvgEntropyArray))
 xlabel!("p")
-ylabel!("Avergae Entropy")
+ylabel!("Average Entropy")
