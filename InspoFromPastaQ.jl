@@ -95,38 +95,46 @@ end
 # Setup
 let 
     # Number of Qubits
-    N = 8
+    #N = 8
     # Circuit Depth
     CircuitDepth = 10
     # Tolerance
     global tol = 1e-8
-    # Create Circuit
-    Circuit = CircuitCreation(CircuitDepth, N)
     # Number of trials
     ntrials = 50
     # Average Entropy Array per p
     global AvgEntropyArray = []
     # Measurement probabilities
-    global problist = LinRange(0, 1, 10)
-    # List to hold each size iteration
-    global BigEntropyList = []
+    global problist = LinRange(0, 0.5, 25)
+    # Array to hold each size iteration
+    global BigEntropyArray = []
+    # Array of System Sizes
+    global SystemSizes = [i for i in 8:4:20]
 
-    # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
-    for p in problist
-        entropytrialarray = [] 
-        @time for _ in 1:ntrials
-            rhoSys, entropy = RunMonitoredCircuit(Circuit, p)
-            push!(entropytrialarray, entropy)
+
+    for N in SystemSizes
+        # Create Circuit of size N
+        Circuit = CircuitCreation(CircuitDepth, N)
+        
+        # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
+        @time for p in problist
+            entropytrialarray = [] 
+            for _ in 1:ntrials
+                rhoSys, entropy = RunMonitoredCircuit(Circuit, p)
+                push!(entropytrialarray, entropy)
+            end
+            push!(AvgEntropyArray, mean(entropytrialarray))
         end
-        push!(AvgEntropyArray, mean(entropytrialarray))
-    end
-
-    for avgentropy in AvgEntropyArray
-        println("Entropy: ", avgentropy)
+        
+        for avgentropy in AvgEntropyArray
+            println("Entropy: ", avgentropy)
+        end
+        
+        push!(BigEntropyArray, AvgEntropyArray)
     end
 end
 
-plot(problist, real.(AvgEntropyArray))
-scatter!(problist, real.(AvgEntropyArray))
+plot(problist, BigEntropyArray)
+scatter!(problist, BigEntropyArray)
 xlabel!("p")
 ylabel!("Average Entropy")
