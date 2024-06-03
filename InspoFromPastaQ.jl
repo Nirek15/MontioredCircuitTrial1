@@ -31,9 +31,9 @@ function Measurement!(rhoSys::MPO, site::Int)
     probabilities = real.(diag(rhoMeasuring))
     # Computer randomly decides if it gets projected up or down (based on probability of down)
     if rand() < probabilities[1]
-        rhoSys = runcircuit(rhoSys, ("P0", site))
+        rhoSys = runcircuit(rhoSys, ("P0", site), maxdim=20)
     else 
-        rhoSys = runcircuit(rhoSys, ("P1", site))
+        rhoSys = runcircuit(rhoSys, ("P1", site), maxdim=20)
     end
     return normalize!(rhoSys)
 
@@ -54,7 +54,7 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
     # Apply gates and measurements
     for layer in circuit
         # Applying Gates
-        rhoSys = runcircuit(rhoSys, layer, cutoff=tol)
+        rhoSys = runcircuit(rhoSys, layer, cutoff=tol, maxdim=20)
 
         # Possible Measurement
         # For each qubit, according to a given probability of measurement, measure it. 
@@ -102,8 +102,6 @@ let
     global tol = 1e-8
     # Number of trials
     ntrials = 50
-    # Average Entropy Array per p
-    global AvgEntropyArray = []
     # Measurement probabilities
     global problist = LinRange(0, 0.5, 25)
     # Array to hold each size iteration
@@ -115,9 +113,12 @@ let
     for N in SystemSizes
         # Create Circuit of size N
         Circuit = CircuitCreation(CircuitDepth, N)
+        # Average Entropy Array per System Size
+        AvgEntropyArray = []
         
         # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
         @time for p in problist
+            # Holds all the entropies for a single p for the amount of trials in a certain system
             entropytrialarray = [] 
             for _ in 1:ntrials
                 rhoSys, entropy = RunMonitoredCircuit(Circuit, p)
@@ -134,7 +135,9 @@ let
     end
 end
 
-plot(problist, BigEntropyArray)
-scatter!(problist, BigEntropyArray)
+println(length(BigEntropyArray))
+
+plot(problist, real.(BigEntropyArray))
+scatter!(problist, real.(BigEntropyArray))
 xlabel!("p")
 ylabel!("Average Entropy")
