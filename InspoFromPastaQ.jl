@@ -11,12 +11,23 @@ using Plots
 gate(::GateName"P0") = [1 0 ; 0 0]
 gate(::GateName"P1") = [0 0 ; 0 1]
 
+function gate(::GateName"ChargeConservingUnitary")
+    phi0 = rand()*2*pi
+    phi1 = rand()*2*pi
+    phi2 = rand()*2*pi
+    phi3 = rand()*2*pi
+    theta = rand()*pi
+
+    return [exp(1im*phi0) 0 0 0; 0 exp(1im*(phi1+phi2))*cos(theta) exp(1im*(phi1-phi2))*sin(theta) 0; 0 -exp(1im*(phi1-phi2))*sin(theta) exp(-1im*(phi1+phi2))*cos(theta) 0; 0 0 0 exp(1im * phi3)]
+end
+
+
 # Circuit Creation
 function CircuitCreation(depth::Int, N::Int)
     Circuit = []
     for j in 1:depth
-        OddEvenLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 1:2:N-1])
-        EvenOddLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 2:2:N-2])
+        OddEvenLayer = gatelayer("ChargeConservingUnitary", [(i, i+1) for i in 1:2:N-1])
+        EvenOddLayer = gatelayer("ChargeConservingUnitary", [(i, i+1) for i in 2:2:N-2])
         push!(Circuit, [OddEvenLayer, EvenOddLayer])
     end
     return Circuit
@@ -87,6 +98,7 @@ function MPOTraceOut(rhoSys::MPO)
 end
 
 function SecondRenyiEntropy(rhoSys::MPO)
+    # Orthoganlize in the center???
     rhoA = MPOTraceOut(rhoSys)
     entropy = -log(tr(apply(rhoA, rhoA)))
     return entropy
@@ -94,8 +106,6 @@ end
 
 # Setup
 let 
-    # Number of Qubits
-    #N = 8
     # Circuit Depth
     CircuitDepth = 10
     # Tolerance
@@ -107,7 +117,7 @@ let
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
-    global SystemSizes = [i for i in 8:4:20]
+    global SystemSizes = [8]
 
 
     for N in SystemSizes
@@ -117,10 +127,10 @@ let
         AvgEntropyArray = []
         
         # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
-        @time for p in problist
+        for p in problist
             # Holds all the entropies for a single p for the amount of trials in a certain system
             entropytrialarray = [] 
-            for _ in 1:ntrials
+            @time for _ in 1:ntrials
                 rhoSys, entropy = RunMonitoredCircuit(Circuit, p)
                 push!(entropytrialarray, entropy)
             end
