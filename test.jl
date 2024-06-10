@@ -3,6 +3,8 @@ using LinearAlgebra
 using StatsBase: mean, sem 
 import Pkg; Pkg.add("StatsBase")
 import Random
+using Distributions
+using Random
 
 # define the two measurement projectors
 gate(::GateName"Π0") =
@@ -95,3 +97,75 @@ let
 end
 
 print([[rand() for _ in 1:3] for _ in 1:5])
+
+
+
+
+
+
+# Define a custom sine distribution
+struct SinDistribution <: ContinuousUnivariateDistribution
+end
+
+# Sampling method (inverse transform sampling)
+function Base.rand(d::SinDistribution, rng::AbstractRNG=Random.GLOBAL_RNG)
+    return acos(1 - 2 * rand(rng))
+end
+
+# Example usage
+sin_dist = SinDistribution()
+
+# Sampling
+sample_theta = rand(sin_dist)
+println("Sampled θ: ", sample_theta)
+
+# Evaluating PDF
+θ_value = π / 4
+pdf_value = pdf(sin_dist, θ_value)
+println("PDF at θ = π/4: ", pdf_value)
+
+# Generate samples
+samples = [rand(sin_dist) for _ in 1:10000]
+
+# Plot histogram
+histogram(samples, bins=50, normalize=true, label="Sampled Distribution")
+plot!(0:0.01:π, θ -> pdf(sin_dist, θ), lw=2, label="0.5 * sin(θ)", xlabel="θ", ylabel="Density")
+
+struct SinDistribution <: ContinuousUnivariateDistribution
+end
+
+# Sampling method (inverse transform sampling)
+function Base.rand(d::SinDistribution, rng::AbstractRNG=Random.GLOBAL_RNG)
+    return acos(1 - 2 * rand(rng))
+end
+
+sin_dist = SinDistribution()
+
+# Projective Measurements onto Computational Basis
+gate(::GateName"Projector0") = [1 0 ; 0 0]
+gate(::GateName"Projector1") = [0 0 ; 0 1]
+
+function gate(::GateName"ChargeConservingUnitary")
+    phi0 = rand()*2*pi
+    phi1 = rand()*2*pi
+    phi2 = rand()*2*pi
+    phi3 = rand()*2*pi
+    theta = rand(sin_dist)
+
+    Matrix = [
+        exp(1im * phi0)  0                               0                               0;
+        0               exp(1im * (phi1 + phi2))*cos(theta)  exp(1im * (phi1 - phi2))*sin(theta)  0;
+        0              -exp(1im * (phi2 - phi1))*sin(theta)  exp(-1im * (phi1 + phi2))*cos(theta)  0;
+        0               0                               0                               exp(1im*phi3)]
+    return Matrix
+end
+
+
+testStateMPS = productstate(4)
+testgatelayer = randomlayer("ChargeConservingUnitary",[(1,2), (3,4)])
+testevolutionMPS = runcircuit(testStateMPS, testgatelayer)
+print(testevolutionMPS[1])
+print(testevolutionMPS[2])
+print(testevolutionMPS[3])
+print(testevolutionMPS[4])
+

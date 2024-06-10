@@ -6,6 +6,18 @@ using ITensorUnicodePlots
 using Statistics
 import Pkg; Pkg.add("Plots")
 using Plots
+using Random
+
+# Define a custom sine distribution
+struct SinDistribution <: ContinuousUnivariateDistribution
+end
+
+# Sampling method (inverse transform sampling)
+function Base.rand(d::SinDistribution, rng::AbstractRNG=Random.GLOBAL_RNG)
+    return acos(1 - 2 * rand(rng))
+end
+
+sin_dist = SinDistribution()
 
 # Projective Measurements onto Computational Basis
 gate(::GateName"Projector0") = [1 0 ; 0 0]
@@ -16,19 +28,28 @@ function gate(::GateName"ChargeConservingUnitary")
     phi1 = rand()*2*pi
     phi2 = rand()*2*pi
     phi3 = rand()*2*pi
-    theta = rand()*pi
+    theta = rand(sin_dist)
 
-    return [exp(1im*phi0) 0 0 0; 0 exp(1im*(phi1+phi2))*cos(theta) exp(1im*(phi1-phi2))*sin(theta) 0; 0 -exp(1im*(phi2-phi1))*sin(theta) exp(-1im*(phi1+phi2))*cos(theta) 0; 0 0 0 exp(1im * phi3)]
+    Matrix = [
+        exp(1im * phi0)  0                               0                               0;
+        0               exp(1im * (phi1 + phi2))*cos(theta)  exp(1im * (phi1 - phi2))*sin(theta)  0;
+        0              -exp(1im * (phi2 - phi1))*sin(theta)  exp(-1im * (phi1 + phi2))*cos(theta)  0;
+        0               0                               0                               exp(1im*phi3)]
+    return Matrix
 end
 
 
 # Circuit Creation (Gates are Charge Conserving)
 function CircuitCreation(depth::Int, N::Int)
     Circuit = []
-    for _ in 1:depth
-        OddEvenLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 1:2:N-1])
-        EvenOddLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 2:2:N-2])
-        push!(Circuit, [OddEvenLayer, EvenOddLayer])
+    for i in 1:depth
+        if isodd(i)
+            OddEvenLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 1:2:N-1])
+            push!(Circuit, [OddEvenLayer])
+        else
+            EvenOddLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 2:2:N-2])
+            push!(Circuit, [EvenOddLayer])
+        end
     end
     return Circuit
 end
@@ -124,10 +145,8 @@ end
 let 
     # Tolerance
     global tol = 1e-100
-    # Number of trials
-    ntrials = 200
     # Measurement probabilities
-    global problist = LinRange(0.1, 0.8, 13)
+    global problist = LinRange(0, 0.5, 15)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
@@ -137,6 +156,8 @@ let
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
+        # Number of trials
+        ntrials = 200
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         
@@ -166,7 +187,8 @@ end
 
 println(length(BigEntropyArray))
 
-plot(problist, real.(BigEntropyArray), ylim=(0,5))
-scatter!(problist, real.(BigEntropyArray))
+plot(problist, real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
+plot!(problist, real.(BigEntropyArray[2]), label="L=8")
+scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
 ylabel!("Average Entropy")
