@@ -62,11 +62,6 @@ function Measurement!(MPSSys::MPS, site::Int)
     MPSMeasuring = MPSSys[site]
     SiteDensityMatrix = prime(MPSMeasuring, tags="Site") * dag(MPSMeasuring)
     
-    #MPSMeasuringTest = MPSSys[site-1]
-    #SiteDensityMatrixTest = prime(MPSMeasuringTest, tags="Site") * dag(MPSMeasuringTest)
-    #print(SiteDensityMatrixTest)
-    
-
     # Grab probabilities from the diagonal of the density matrix
     probabilities = real.(diag(SiteDensityMatrix))
     # Computer decides if it gets projected up or down based on probability of down
@@ -137,7 +132,7 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
     # Apply gates and measurements
     for layer in circuit
         # Applying Gates
-        MPSSys = runcircuit(MPSSys, layer, cutoff=tol)
+        MPSSys = runcircuit(MPSSys, layer)
 
         # Possible Measurement
         # For each qubit, according to a given probability of measurement, measure it. 
@@ -155,18 +150,18 @@ let
     # Tolerance
     global tol = 1e-150
     # Measurement probabilities
-    global problist = [0.1]#LinRange(0.1, 0.2, 2)
+    global problist = LinRange(0, 0.1, 15)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
-    global SystemSizes = [6]
+    global SystemSizes = [6,8]
 
 
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 1
+        ntrials = 50
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         
@@ -196,8 +191,8 @@ end
 
 println(length(BigEntropyArray))
 
-plot(log.(problist), real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
-plot!(log.(problist), real.(BigEntropyArray[2]), label="L=8")
-scatter!(log.(problist), real.(BigEntropyArray), label="")
+plot(problist, real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
+plot!(problist, real.(BigEntropyArray[2]), label="L=8")
+scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
 ylabel!("Average Entropy")

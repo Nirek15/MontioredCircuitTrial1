@@ -7,9 +7,56 @@ using Statistics
 import Pkg; Pkg.add("Plots")
 using Plots
 using Random
+using LinearAlgebra
+using StatsBase
+using StaticArrays
+import ITensors: op
+
 
 ITensors.op(::OpName"ProjectUp",::SiteType"S=1/2") = [1 0; 0 0]
 ITensors.op(::OpName"ProjectDown",::SiteType"S=1/2") = [0 0; 0 1]
+
+# Define a custom sine distribution
+struct SinDistribution <: ContinuousUnivariateDistribution
+end
+
+# Sampling method (inverse transform sampling)
+function Base.rand(d::SinDistribution, rng::AbstractRNG=Random.GLOBAL_RNG)
+    return acos(1 - 2 * rand(rng))
+end
+
+sin_dist = SinDistribution()
+
+function ITensors.op(::OpName"ChargeConservingUnitaryGate", ::SiteType"S=1/2", s1::Index, s2::Index)
+
+    phi0 = rand()*2*pi
+    phi1 = rand()*2*pi
+    phi2 = rand()*2*pi
+    phi3 = rand()*2*pi
+    theta = rand(sin_dist)
+
+    Matrix = [
+        exp(1im * phi0)  0                               0                               0;
+        0               exp(1im * (phi1 + phi2))*cos(theta)  exp(1im * (phi1 - phi2))*sin(theta)  0;
+        0              -exp(1im * (phi2 - phi1))*sin(theta)  exp(-1im * (phi1 + phi2))*cos(theta)  0;
+        0               0                               0                               exp(1im*phi3)]
+
+    return itensor(Matrix, s2', s1', s2, s1)
+end
+
+
+function rand_haar2(::Val{n}) where n
+    M = randn(SMatrix{n,n,ComplexF64}) 
+    q = qr(M).Q
+    L = cispi.(2 .* @SVector(rand(n)))
+    return q*diagm(L)
+end
+
+function op(::OpName"haar2",::SiteType"S=1/2",s1::Index,s2::Index)
+    h = rand_haar2(Val{4}())
+     return itensor(Matrix(h),s2',s1',s2,s1)
+  end
+
 
 
 function VonNeumannEntropy(MPSSys::MPS)
@@ -32,13 +79,13 @@ function CreateCircuit(depth::Int, N::Int)
         if isodd(i)
             oddeventemplayer = []
             for j in 1:2:N-1
-                push!(oddeventemplayer, ("RandomUnitary", j, j+1))
+                push!(oddeventemplayer, ("haar2", j, j+1))
             end
             push!(Circuit, oddeventemplayer)
         else
             evenoddtemplayer = []
             for j in 2:2:N-2
-                push!(evenoddtemplayer, ("RandomUnitary", j, j+1))
+                push!(evenoddtemplayer, ("haar2", j, j+1))
             end
             push!(Circuit, evenoddtemplayer)
         end
@@ -46,7 +93,8 @@ function CreateCircuit(depth::Int, N::Int)
     return Circuit
 end
 
-function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector)
+
+function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
     for site in MeasurementSites
         
         orthogonalize!(MPSSys, site)
@@ -59,17 +107,20 @@ function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector)
 
         # Computer decides if it gets projected up or down based on probability of down
         if rand() < probabilities[1]
-            ProjectUpMPO = MPO("ProjectUp", site)
-            newMPSSite = ProjectUpMPO * MPSSys[site]
-            noprime!(newMPSSite)
-            MPSSys[site] = newMPSSite
+            os = OpSum()
+            os += "ProjectUp", site
+            ProjectUpMPO = MPO(os, s)
+            MPSSys = apply(ProjectUpMPO, MPSSys, cutoff=tol)
+            #MPSSys = runcircuit(MPSSys, ("ProjectUp", site))
         else 
-            ProjectDownMPO = MPO("ProjectDown", site)
-            newMPSSite = ProjectDownMPO * MPSSys[site]
-            noprime!(newMPSSite)
-            MPSSys[site] = newMPSSite
+            os = OpSum()
+            os += "ProjectDown", site
+            ProjectDownMPO = MPO(os, s)
+            MPSSys = apply(ProjectDownMPO, MPSSys, cutoff=tol)
+            #MPSSys = runcircuit(MPSSys, ("ProjectDown", site))
         end
     end
+    #noprime!(MPSSys)
     return normalize!(MPSSys)
 end
 
@@ -86,8 +137,9 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
 
     # Apply gates and measurements
     for layer in circuit
+
         # Applying Gates
-        MPSSys = apply(ITensors.ops(layer,s), MPSSys, cutoff=tol)
+        MPSSys = apply(ITensors.ops(layer, s), MPSSys)
 
         # Possible Measurement
         # For each qubit, according to a given probability of measurement, measure it. 
@@ -100,28 +152,30 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
             end
         end
 
-        MPSSys = PerformMeasurement!(MPSSys, MeasuringSites)
+
+        MPSSys = PerformMeasurement!(MPSSys, MeasuringSites, s)
 
     end
     return MPSSys, VonNeumannEntropy(MPSSys)
 end
 
+
 let 
     # Tolerance
     global tol = 1e-150
     # Measurement probabilities
-    global problist = [0.1] #LinRange(0.1, 0.2, 2)
+    global problist = LinRange(0, 0.1, 15)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
-    global SystemSizes = [6]
+    global SystemSizes = [6,8]
 
 
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 1
+        ntrials = 50
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         
@@ -147,4 +201,12 @@ let
         push!(BigEntropyArray, AvgEntropyArray)
     end
 end
+
+plot(problist, real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
+plot!(problist, real.(BigEntropyArray[2]), label="L=8")
+scatter!(problist, real.(BigEntropyArray), label="")
+xlabel!("p")
+ylabel!("Average Entropy")
+
+
 
