@@ -7,6 +7,7 @@ using Statistics
 import Pkg; Pkg.add("Plots")
 using Plots
 using Random
+using Distributions
 
 # Define a custom sine distribution
 struct SinDistribution <: ContinuousUnivariateDistribution
@@ -45,10 +46,10 @@ function CircuitCreation(depth::Int, N::Int)
     for i in 1:depth
         if isodd(i)
             OddEvenLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 1:2:N-1])
-            push!(Circuit, [OddEvenLayer])
+            push!(Circuit, OddEvenLayer)
         else
             EvenOddLayer = randomlayer("RandomUnitary", [(i, i+1) for i in 2:2:N-2])
-            push!(Circuit, [EvenOddLayer])
+            push!(Circuit, EvenOddLayer)
         end
     end
     return Circuit
@@ -60,6 +61,12 @@ function Measurement!(MPSSys::MPS, site::Int)
     # Create a density matrix for the qubit we are measuring
     MPSMeasuring = MPSSys[site]
     SiteDensityMatrix = prime(MPSMeasuring, tags="Site") * dag(MPSMeasuring)
+    
+    #MPSMeasuringTest = MPSSys[site-1]
+    #SiteDensityMatrixTest = prime(MPSMeasuringTest, tags="Site") * dag(MPSMeasuringTest)
+    #print(SiteDensityMatrixTest)
+    
+
     # Grab probabilities from the diagonal of the density matrix
     probabilities = real.(diag(SiteDensityMatrix))
     # Computer decides if it gets projected up or down based on probability of down
@@ -79,7 +86,7 @@ function VonNeumannEntropy(MPSSys::MPS)
     U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=tol)
 
     entropy = 0
-    for n=1:dim(S,1)
+    for n=1:ITensors.dim(S,1)
         pn = (S[n,n])^2
         entropy -= pn * log(pn)
     end
@@ -124,6 +131,8 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
 
     # Produce MPS state 
     MPSSys = productstate(N)
+    #FlipOdds = gatelayer("X", [i for i in 2:2:N])
+    #MPSSys = runcircuit(MPSSys,FlipOdds,cutoff=tol)
 
     # Apply gates and measurements
     for layer in circuit
@@ -144,20 +153,20 @@ end
 # Setup
 let 
     # Tolerance
-    global tol = 1e-100
+    global tol = 1e-150
     # Measurement probabilities
-    global problist = LinRange(0, 0.5, 15)
+    global problist = [0.1]#LinRange(0.1, 0.2, 2)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
-    global SystemSizes = [6,8]
+    global SystemSizes = [6]
 
 
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 200
+        ntrials = 1
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         
@@ -187,8 +196,8 @@ end
 
 println(length(BigEntropyArray))
 
-plot(problist, real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
-plot!(problist, real.(BigEntropyArray[2]), label="L=8")
-scatter!(problist, real.(BigEntropyArray), label="")
+plot(log.(problist), real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
+plot!(log.(problist), real.(BigEntropyArray[2]), label="L=8")
+scatter!(log.(problist), real.(BigEntropyArray), label="")
 xlabel!("p")
 ylabel!("Average Entropy")
