@@ -1,10 +1,8 @@
 using ITensors, ITensorMPS
-import Pkg; Pkg.add("PastaQ") 
 using PastaQ
 import PastaQ: gate
 using ITensorUnicodePlots
 using Statistics
-import Pkg; Pkg.add("Plots")
 using Plots
 using Random
 using LinearAlgebra
@@ -63,10 +61,13 @@ function VonNeumannEntropy(MPSSys::MPS)
     N = length(MPSSys)
     SubSysCutoff = Int(round(N/2))
     orthogonalize!(MPSSys, SubSysCutoff)
-    U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=tol)
+    U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=1e-308)
 
+    
+    ABCTest = array(S)
+    println(ABCTest)
     entropy = 0
-    for n=1:ITensors.dim(S,1)
+    for n in 1:ITensors.dim(S,1)
         pn = (S[n,n])^2
         entropy -= pn * log(pn)
     end
@@ -111,16 +112,14 @@ function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
             os += "ProjectUp", site
             ProjectUpMPO = MPO(os, s)
             MPSSys = apply(ProjectUpMPO, MPSSys, cutoff=tol)
-            #MPSSys = runcircuit(MPSSys, ("ProjectUp", site))
         else 
             os = OpSum()
             os += "ProjectDown", site
             ProjectDownMPO = MPO(os, s)
             MPSSys = apply(ProjectDownMPO, MPSSys, cutoff=tol)
-            #MPSSys = runcircuit(MPSSys, ("ProjectDown", site))
         end
     end
-    #noprime!(MPSSys)
+    noprime!(MPSSys)
     return normalize!(MPSSys)
 end
 
@@ -162,13 +161,13 @@ end
 
 let 
     # Tolerance
-    global tol = 1e-150
+    global tol = 1e-8
     # Measurement probabilities
-    global problist = LinRange(0, 0.1, 15)
+    global problist = [0.3] #LinRange(0, 0.1, 15)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
-    global SystemSizes = [6,8]
+    global SystemSizes = [6]
 
 
     for N in SystemSizes

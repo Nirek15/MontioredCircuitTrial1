@@ -60,7 +60,8 @@ function Measurement!(MPSSys::MPS, site::Int)
     orthogonalize!(MPSSys, site)
     # Create a density matrix for the qubit we are measuring
     MPSMeasuring = MPSSys[site]
-    SiteDensityMatrix = prime(MPSMeasuring, tags="Site") * dag(MPSMeasuring)
+    SiteDensityMatrix = prime(MPSMeasuring) * dag(MPSMeasuring)
+    #DensityMatrix = outer(MPSSys', MPSSys)
     
     # Grab probabilities from the diagonal of the density matrix
     probabilities = real.(diag(SiteDensityMatrix))
@@ -150,7 +151,7 @@ let
     # Tolerance
     global tol = 1e-150
     # Measurement probabilities
-    global problist = LinRange(0, 0.1, 15)
+    global problist = [0.1]#LinRange(0.1, 0.8, 13)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
@@ -161,7 +162,7 @@ let
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 50
+        ntrials = 100
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         
