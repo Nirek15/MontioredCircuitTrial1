@@ -1,0 +1,216 @@
+using ITensors, ITensorMPS
+using PastaQ
+import PastaQ: gate
+using ITensorUnicodePlots
+using Statistics
+using Plots
+using Random
+using Distributions
+
+# Define a custom sine distribution
+struct SinDistribution <: ContinuousUnivariateDistribution
+end
+
+# Sampling method (inverse transform sampling)
+function Base.rand(d::SinDistribution, rng::AbstractRNG=Random.GLOBAL_RNG)
+    return acos(1 - 2 * rand(rng))
+end
+
+sin_dist = SinDistribution()
+
+# Projective Measurements onto Computational Basis
+gate(::GateName"Projector0") = [1 0 ; 0 0]
+gate(::GateName"Projector1") = [0 0 ; 0 1]
+
+function gate(::GateName"ChargeConservingUnitary")
+    phi0 = rand()*2*pi
+    phi1 = rand()*2*pi
+    phi2 = rand()*2*pi
+    phi3 = rand()*2*pi
+    theta = rand(sin_dist)
+
+    Matrix = [
+        exp(1im * phi0)  0                               0                               0;
+        0               exp(1im * (phi1 + phi2))*cos(theta)  exp(1im * (phi1 - phi2))*sin(theta)  0;
+        0              -exp(1im * (phi2 - phi1))*sin(theta)  exp(-1im * (phi1 + phi2))*cos(theta)  0;
+        0               0                               0                               exp(1im*phi3)]
+    return Matrix
+end
+
+function addzero()
+    global zerocount += 1
+end
+
+function addone()
+    global onecount += 1
+end
+
+# Circuit Creation (Gates are Charge Conserving)
+function CircuitCreation(depth::Int, N::Int)
+    Circuit = []
+    for i in 1:depth
+        if isodd(i)
+            OddEvenLayer = gatelayer("RandomUnitary", [(i, i+1) for i in 1:2:N-1])
+            push!(Circuit, OddEvenLayer)
+        else
+            EvenOddLayer = gatelayer("RandomUnitary", [(i, i+1) for i in 2:2:N-2])
+            push!(Circuit, EvenOddLayer)
+        end
+    end
+    return Circuit
+end
+
+# Performs a Projective Measurement onto Computational Basis
+function Measurement!(MPSSys::MPS, site::Int)
+    orthogonalize!(MPSSys, site)
+    # Create a density matrix for the qubit we are measuring
+    MPSMeasuring = MPSSys[site]
+    #println(MPSMeasuring)
+    SiteDensityMatrix = prime(MPSMeasuring, tags="Site") * dag(MPSMeasuring)
+
+    # THIS IS THE ISSUE (As of NOW) cnnot use diag, must reshape this 2x2x2x2 Itensor into 2x2 matrix
+    # Grab probabilities from the diagonal of the density matrix
+    probabilities = real.(diag(SiteDensityMatrix))
+
+
+    # Computer decides if it gets projected up or down based on probability of down
+    if rand() < probabilities[1]
+        MPSSys = runcircuit(MPSSys, ("Projector0", site))
+        addzero()
+    else 
+        MPSSys = runcircuit(MPSSys, ("Projector1", site))
+        addone()
+    end
+    return normalize!(MPSSys)
+end
+
+
+function VonNeumannEntropy(MPSSys::MPS)
+    N = length(MPSSys)
+    SubSysCutoff = Int(round(N/2))
+    orthogonalize!(MPSSys, SubSysCutoff)
+    U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=1e-100)
+
+    entropy = 0
+    for n=1:ITensors.dim(S,1)
+        pn = (S[n,n])^2
+        entropy -= pn * log(pn)
+    end
+    return entropy
+end
+
+
+#=
+function TripartateMI(MPSSys::MPS)
+    N = length(MPS)
+    PartitionSize = int(N/4)
+
+    orthogonalize!(MPSSys,1)
+
+    MPSSysdag = prime(dag(MPSSys),linkinds(MPSSys))
+
+    rho12 = prime(MPSSys[1],linkinds(MPSSys,0))*prime(MPSSysdag[1], tags="Site")
+    rho12 *= prime(MPSSys[2],linkinds(MPSSys,2))*prime(MPSSysdag[2], tags="Site")
+
+    orthogonalize!(MPSSys, 3)
+
+    MPSSysdag = prime(dag(MPSSys),linkinds(MPSSys))
+
+    rho34 = prime(MPSSys[3],linkinds(MPSSys,2))*prime(MPSSysdag[3], tags="Site")
+    rho34 *= prime(MPSSys[4],linkinds(MPSSys,4))*prime(MPSSysdag[4], tags="Site")
+
+    orthogonalize!(MPSSys, 5)
+
+    MPSSysdag = prime(dag(MPSSys),linkinds(MPSSys))
+
+    rho56 = prime(MPSSys[5],linkinds(MPSSys,4))*prime(MPSSysdag[5], tags="Site")
+    rho56 *= prime(MPSSys[6],linkinds(MPSSys,6))*prime(MPSSysdag[6], tags="Site")
+
+end
+=#
+
+
+function RunMonitoredCircuit(circuit::Vector, p::Float64)
+
+    # Number of Qubits
+    N = nqubits(circuit)
+
+    # Produce MPS state 
+    MPSSys = productstate(N)
+    #FlipOdds = gatelayer("X", [i for i in 2:2:N])
+    #MPSSys = runcircuit(MPSSys,FlipOdds,cutoff=tol)
+
+    # Apply gates and measurements
+    
+    for layer in circuit
+        # Applying Gates
+        MPSSys = runcircuit(MPSSys, layer)
+
+        # Possible Measurement
+        # For each qubit, according to a given probability of measurement, measure it. 
+        for i in 1:N
+            if rand() < p
+                MPSSys = Measurement!(MPSSys, i)
+            end
+        end
+    end
+    
+    return MPSSys, VonNeumannEntropy(MPSSys)
+end
+
+zerocount = 0
+onecount = 0
+
+# Setup
+let 
+    # Tolerance
+    global tol = 1e-150
+    # Measurement probabilities
+    global problist = LinRange(0.1, 0.8, 13)
+    # Array to hold each size iteration
+    global BigEntropyArray = []
+    # Array of System Sizes
+    global SystemSizes = [6]
+
+
+    for N in SystemSizes
+        # Circuit Depth
+        CircuitDepth = 2 * N
+        # Number of trials
+        ntrials = 50
+        # Average Entropy Array per System Size
+        AvgEntropyArray = []
+        
+        # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
+        for prob in problist
+            # Holds all the entropies for a single p for the amount of trials in a certain system
+            entropytrialarray = [] 
+            @time for _ in 1:ntrials   
+                # Create Circuit of size N
+                Circuit = CircuitCreation(CircuitDepth, N)
+
+                MPSSys, entropy = RunMonitoredCircuit(Circuit, prob)
+                push!(entropytrialarray, entropy)
+            end
+            push!(AvgEntropyArray, mean(entropytrialarray))
+            print(maximum(entropytrialarray))
+        end
+        
+        # Printing Entropy
+        for avgentropy in AvgEntropyArray
+            println("Entropy: ", avgentropy)
+        end
+        
+        # Bring the entropy array to the array for each system size
+        push!(BigEntropyArray, AvgEntropyArray)
+    end
+end
+
+print(zerocount)
+print(onecount)
+
+plot(problist, real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
+plot!(problist, real.(BigEntropyArray[2]), label="L=8")
+scatter!(problist, real.(BigEntropyArray), label="")
+xlabel!("p")
+ylabel!("Average Entropy")

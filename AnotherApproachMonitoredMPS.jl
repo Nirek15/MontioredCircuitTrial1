@@ -56,20 +56,26 @@ function op(::OpName"haar2",::SiteType"S=1/2",s1::Index,s2::Index)
   end
 
 
+function addzero()
+    global zerocount += 1
+end
+
+function addone()
+    global onecount += 1
+end
 
 function VonNeumannEntropy(MPSSys::MPS)
+    normalize!(MPSSys)
     N = length(MPSSys)
     SubSysCutoff = Int(round(N/2))
     orthogonalize!(MPSSys, SubSysCutoff)
-    U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=1e-308)
+    U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=1e-100)
 
-    
-    ABCTest = array(S)
-    println(ABCTest)
     entropy = 0
     for n in 1:ITensors.dim(S,1)
         pn = (S[n,n])^2
         entropy -= pn * log(pn)
+        #end
     end
     return entropy
 end
@@ -97,26 +103,26 @@ end
 
 function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
     for site in MeasurementSites
-        
+        normalize!(MPSSys)
         orthogonalize!(MPSSys, site)
         # Create a density matrix for the qubit we are measuring
         MPSMeasuring = MPSSys[site]
-        SiteDensityMatrix = prime(MPSMeasuring, tags="Site") * dag(MPSMeasuring)
-        
-        # Grab probabilities from the diagonal of the density matrix
-        probabilities = real.(diag(SiteDensityMatrix))
+        SiteDensityMatrix = prime(MPSMeasuring, s) * dag(MPSMeasuring)
+        DensityMatrix = [SiteDensityMatrix[1] SiteDensityMatrix[2]; SiteDensityMatrix[3] SiteDensityMatrix[4]]
 
         # Computer decides if it gets projected up or down based on probability of down
-        if rand() < probabilities[1]
+        if rand() < real.(DensityMatrix[1])
             os = OpSum()
             os += "ProjectUp", site
             ProjectUpMPO = MPO(os, s)
             MPSSys = apply(ProjectUpMPO, MPSSys, cutoff=tol)
+            addzero()
         else 
             os = OpSum()
             os += "ProjectDown", site
             ProjectDownMPO = MPO(os, s)
             MPSSys = apply(ProjectDownMPO, MPSSys, cutoff=tol)
+            addone()
         end
     end
     noprime!(MPSSys)
@@ -132,7 +138,7 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
     s = siteinds("S=1/2", N)
 
     # Produce MPS state
-    MPSSys = MPS(s, n -> iseven(n) ? "↓" : "↑")
+    MPSSys = MPS(s, "↑") #MPS(s, n -> iseven(n) ? "↓" : "↑")
 
     # Apply gates and measurements
     for layer in circuit
@@ -158,14 +164,18 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
     return MPSSys, VonNeumannEntropy(MPSSys)
 end
 
+zerocount = 0
+onecount = 0
 
 let 
     # Tolerance
     global tol = 1e-8
     # Measurement probabilities
-    global problist = [0.3] #LinRange(0, 0.1, 15)
+    global problist = LinRange(0.1, 0.8, 13)
     # Array to hold each size iteration
     global BigEntropyArray = []
+    # SE Array
+    global BigSEArray = []
     # Array of System Sizes
     global SystemSizes = [6]
 
@@ -177,6 +187,7 @@ let
         ntrials = 50
         # Average Entropy Array per System Size
         AvgEntropyArray = []
+        smallSEArray = []
         
         # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
         for prob in problist
@@ -188,6 +199,7 @@ let
                 MPSSys, entropy = RunMonitoredCircuit(Circuit, prob)
                 push!(entropytrialarray, entropy)
             end
+            push!(smallSEArray, std(entropytrialarray)/sqrt(ntrials))
             push!(AvgEntropyArray, mean(entropytrialarray))
         end
         
@@ -198,14 +210,15 @@ let
         
         # Bring the entropy array to the array for each system size
         push!(BigEntropyArray, AvgEntropyArray)
+        push!(BigSEArray, smallSEArray)
     end
 end
 
-plot(problist, real.(BigEntropyArray[1]), ylim=(0,5), label="L=6")
-plot!(problist, real.(BigEntropyArray[2]), label="L=8")
+println(zerocount)
+println(onecount)
+
+plot(problist, real.(BigEntropyArray[1]), yerror = sqrt(100) * BigSEArray[1], ylim=(0,5), label="L=6")
+plot!(problist, real.(BigEntropyArray[2]), yerror = sqrt(100)* BigSEArray[2], label="L=8")
 scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
 ylabel!("Average Entropy")
-
-
-

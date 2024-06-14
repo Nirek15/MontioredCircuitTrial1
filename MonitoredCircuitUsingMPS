@@ -68,23 +68,26 @@ function Measurement!(MPSSys::MPS, site::Int)
     # Computer decides if it gets projected up or down based on probability of down
     if rand() < probabilities[1]
         MPSSys = runcircuit(MPSSys, ("Projector0", site))
+        addzero()
     else 
         MPSSys = runcircuit(MPSSys, ("Projector1", site))
+        addone()
     end
     return normalize!(MPSSys)
 end
 
 
 function VonNeumannEntropy(MPSSys::MPS)
+    normalize
     N = length(MPSSys)
     SubSysCutoff = Int(round(N/2))
     orthogonalize!(MPSSys, SubSysCutoff)
     U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=tol)
-
+    
     entropy = 0
     for n=1:ITensors.dim(S,1)
         pn = (S[n,n])^2
-        entropy -= pn * log(pn)
+        entropy -= pn * log(pn + 1e-20)
     end
     return entropy
 end
@@ -146,16 +149,19 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
     return MPSSys, VonNeumannEntropy(MPSSys)
 end
 
+zerocount = 0
+onecount= 0
+
 # Setup
 let 
     # Tolerance
     global tol = 1e-150
     # Measurement probabilities
-    global problist = [0.1]#LinRange(0.1, 0.8, 13)
+    global problist = LinRange(0.1, 0.8, 13)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # Array of System Sizes
-    global SystemSizes = [6,8]
+    global SystemSizes = [6]
 
 
     for N in SystemSizes
@@ -173,6 +179,7 @@ let
             @time for _ in 1:ntrials   
                 # Create Circuit of size N
                 Circuit = CircuitCreation(CircuitDepth, N)
+
                 MPSSys, entropy = RunMonitoredCircuit(Circuit, prob)
                 push!(entropytrialarray, entropy)
             end
@@ -189,6 +196,9 @@ let
     end
 end
 
+
+print(zerocount)
+print(onecount)
 
 println(length(BigEntropyArray))
 
