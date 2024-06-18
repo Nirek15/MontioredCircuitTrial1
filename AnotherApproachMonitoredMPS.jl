@@ -9,6 +9,7 @@ using LinearAlgebra
 using StatsBase
 using StaticArrays
 import ITensors: op
+using Distributions
 
 
 ITensors.op(::OpName"ProjectUp",::SiteType"S=1/2") = [1 0; 0 0]
@@ -69,7 +70,7 @@ function VonNeumannEntropy(MPSSys::MPS)
     N = length(MPSSys)
     SubSysCutoff = Int(round(N/2))
     orthogonalize!(MPSSys, SubSysCutoff)
-    U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=1e-100)
+    U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=1e-150)
 
     entropy = 0
     for n in 1:ITensors.dim(S,1)
@@ -171,20 +172,20 @@ let
     # Tolerance
     global tol = 1e-8
     # Measurement probabilities
-    global problist = LinRange(0.1, 0.8, 13)
+    global problist = LinRange(0, 1, 20)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
     global BigSEArray = []
     # Array of System Sizes
-    global SystemSizes = [6]
+    global SystemSizes = [6,8]
 
 
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 50
+        ntrials = 500
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         smallSEArray = []
@@ -217,8 +218,10 @@ end
 println(zerocount)
 println(onecount)
 
-plot(problist, real.(BigEntropyArray[1]), yerror = sqrt(100) * BigSEArray[1], ylim=(0,5), label="L=6")
+plot(problist, real.(BigEntropyArray[1]), yerror = sqrt(100) * BigSEArray[1], ylim=(-0.5,5), label="L=6")
 plot!(problist, real.(BigEntropyArray[2]), yerror = sqrt(100)* BigSEArray[2], label="L=8")
 scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
 ylabel!("Average Entropy")
+
+png("0to1ItensorImplementation")
