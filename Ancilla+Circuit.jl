@@ -15,11 +15,34 @@ using Distributions
 ITensors.op(::OpName"ProjectUp",::SiteType"S=1/2") = [1 0; 0 0]
 ITensors.op(::OpName"ProjectDown",::SiteType"S=1/2") = [0 0; 0 1]
 
-function RandomHaar(::Val{n}) where n
-    M = randn(SMatrix{n,n,ComplexF64}) 
-    Q, R = qr(M)
-    Lambda = diagm([x/abs(x) for x in diag(R)])
-    return Q * Lambda
+# Define a custom sine distribution
+
+struct SinDistribution <: ContinuousUnivariateDistribution
+end
+
+# Sampling method (inverse transform sampling)
+
+function Base.rand(d::SinDistribution, rng::AbstractRNG=Random.GLOBAL_RNG)
+    return acos(1 - 2 * rand(rng))
+end
+
+sin_dist = SinDistribution()
+
+function ITensors.op(::OpName"ChargeConservingUnitaryGate", ::SiteType"S=1/2", s1::Index, s2::Index)
+
+    phi0 = rand()*2*pi
+    phi1 = rand()*2*pi
+    phi2 = rand()*2*pi
+    phi3 = rand()*2*pi
+    theta = rand(sin_dist)
+
+    Matrix = [
+        exp(1im * phi0)  0                               0                               0;
+        0               exp(1im * (phi1 + phi2))*cos(theta)  exp(1im * (phi1 - phi2))*sin(theta)  0;
+        0              -exp(1im * (phi2 - phi1))*sin(theta)  exp(-1im * (phi1 + phi2))*cos(theta)  0;
+        0               0                               0                               exp(1im*phi3)]
+
+    return itensor(Matrix, s2', s1', s2, s1)
 end
 
 function ITensors.op(::OpName"ChargeConservingUnitaryGate2", ::SiteType"S=1/2", s1::Index, s2::Index)
@@ -38,13 +61,21 @@ function ITensors.op(::OpName"ChargeConservingUnitaryGate2", ::SiteType"S=1/2", 
 end
 
 
+function RandomHaar(::Val{n}) where n
+    M = randn(SMatrix{n,n,ComplexF64}) 
+    Q, R = qr(M)
+    Lambda = diagm([x/abs(x) for x in diag(R)])
+    return Q * Lambda
+end
+
 function op(::OpName"HaarRandomGate",::SiteType"S=1/2",s1::Index,s2::Index)
     h = RandomHaar(Val{4}())
     return itensor(Matrix(h),s2',s1',s2,s1)
   end
 
 
-function addzero()
+
+  function addzero()
     global zerocount += 1
 end
 
@@ -53,9 +84,14 @@ function addone()
 end
 
 function VonNeumannEntropy(MPSSys::MPS)
+
     normalize!(MPSSys)
+    #MPSSys = FocusOnCircuit(MPSSys)
     N = length(MPSSys)
-    SubSysCutoff = Int(round(N/2))
+
+
+    # Cutoff at Ancilla
+    SubSysCutoff = 1 #Int(round(N/2)) + 1 #4
     orthogonalize!(MPSSys, SubSysCutoff)
     U,S,V = svd(MPSSys[SubSysCutoff], (linkinds(MPSSys, SubSysCutoff-1)..., siteinds(MPSSys, SubSysCutoff)...), cutoff=1e-150)
 
@@ -63,26 +99,26 @@ function VonNeumannEntropy(MPSSys::MPS)
     entropy = 0
     for n in 1:ITensors.dim(S,1)
         pn = (S[n,n])^2
-        entropy -= pn * log2(pn)
-        #end
+        entropy -= pn * log(pn)
     end
 
     return entropy
 end
 
-function CreateCircuit(depth::Int, N::Int)
+# Adjusted to allow ancilla
+function CreateCircuitAncilla(depth::Int, N::Int)
     Circuit = []
     for i in 1:depth
         if isodd(i)
             oddeventemplayer = []
-            for j in 1:2:N-1
-                push!(oddeventemplayer, ("HaarRandomGate", j, j+1))
+            for j in 2:2:N-1
+                push!(oddeventemplayer, ("ChargeConservingUnitaryGate", j, j+1))
             end
             push!(Circuit, oddeventemplayer)
         else
             evenoddtemplayer = []
-            for j in 2:2:N-2
-                push!(evenoddtemplayer, ("HaarRandomGate", j, j+1))
+            for j in 3:2:N-2
+                push!(evenoddtemplayer, ("ChargeConservingUnitaryGate", j, j+1))
             end
             push!(Circuit, evenoddtemplayer)
         end
@@ -91,7 +127,30 @@ function CreateCircuit(depth::Int, N::Int)
 end
 
 
+function FocusOnCircuit(MPSSys::MPS)
+    CircuitLength = length(MPSSys) - 1
+    CircuitMPS = MPS(CircuitLength)
+    for i in 1:CircuitLength
+        CircuitMPS[i] = MPSSys[i+1]
+    end
+    return CircuitMPS
+end
+
+function BringAncillaBack(MPSSys::MPS, Ancilla::ITensor)
+    TotalMPSLength = length(MPSSys) + 1
+    FullMPS = MPS(TotalMPSLength)
+
+    FullMPS[1] = Ancilla
+    for i in 2:TotalMPSLength
+        FullMPS[i] = MPSSys[i-1]
+    end
+
+    return FullMPS
+end
+
+
 function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
+
     for site in MeasurementSites
         normalize!(MPSSys)
         orthogonalize!(MPSSys, site)
@@ -114,45 +173,68 @@ function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
             MPSSys = apply(ProjectDownMPO, MPSSys, cutoff=tol)
             addone()
         end
+        normalize!(MPSSys)
     end
+
     noprime!(MPSSys)
+
     return normalize!(MPSSys)
 end
 
-function CreateMeasurementTrajectory(N::Int, depth::Int, p::Float64)
-    MeasurementTrajectory = []
-    for _ in 1:depth
-        LayerMeasurementsSites = []
-        for i in 1:N
-            if rand() < p
-                push!(LayerMeasurementsSites, i)
-            end
+function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
+
+    # Entangle Ancilla and First Qubit
+    entangleancilla1 = [("H", 1)]
+    MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
+    entangleancilla2 = [("CNOT", 1, 2)]
+    MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
+    #entangleancilla3 =[("CNOT", 2, 4)]
+    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+
+    # Create scramble layer gates
+    if ScrambleDepth != 0
+        ScrambleCircuit = CreateCircuitAncilla(ScrambleDepth, N+1)
+        
+        # Applying the scrambling
+        
+        for scramblelayer in ScrambleCircuit
+            MPSSys = apply(ITensors.ops(scramblelayer, s), MPSSys)
         end
-        push!(MeasurementTrajectory, LayerMeasurementsSites)
     end
-    return MeasurementTrajectory
+
+    return MPSSys
 end
 
-function RunMonitoredCircuit(circuit::Vector, MeasurementTrajectory::Vector)
+function RunMonitoredCircuit(circuit::Vector, p::Float64, N::Int, ScrambleDepth::Int)
 
-    # Number of Qubits
-    N = nqubits(circuit)
+    # Number of Qubits N
 
-    # Create Site
-    s = siteinds("S=1/2", N)
+    # Create Sites for MPS and ancilla
+    s = siteinds("S=1/2", N+1)
 
-    # Produce MPS state
-    MPSSys = MPS(s, n -> iseven(n) ? "↓" : "↑")
+    # Produce MPS state with ancilla 
+    MPSSys = MPS(s, n -> iseven(n) || n == 1 ? "↑" : "↓")
+
+    MPSSys = Scramble!(MPSSys, ScrambleDepth, N, s)
 
     # Apply gates and measurements
-    for (layer, i) in zip(circuit, 1:length(circuit))
+    for layer in circuit
 
         # Applying Gates
         MPSSys = apply(ITensors.ops(layer, s), MPSSys)
 
         # Possible Measurement
         # For each qubit, according to a given probability of measurement, measure it. 
-        MPSSys = PerformMeasurement!(MPSSys, MeasurementTrajectory[i], s)
+
+        MeasuringSites = []
+
+        for i in 2:N+1
+            if rand() < p
+                push!(MeasuringSites,i)
+            end
+        end
+
+        MPSSys = PerformMeasurement!(MPSSys, MeasuringSites, s)
 
     end
     return MPSSys, VonNeumannEntropy(MPSSys)
@@ -163,36 +245,37 @@ onecount = 0
 
 let 
     # Tolerance
-    global tol = 1e-50
+    global tol = 1e-150
     # Measurement probabilities
-    global problist = LinRange(0.1, 0.8, 13)
+    global problist = LinRange(0.05, 0.15, 10)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
     global BigSEArray = []
     # Array of System Sizes
-    global SystemSizes = [6, 8, 10]
+    global SystemSizes = [6,8,10]
+    # How many layers of scrambling (2 -> 1 even 1 odd)
+    global ScrambleDepth = 6
 
 
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 1000
+        ntrials = 200
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         smallSEArray = []
         
-        # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
         for prob in problist
-
-            MeasurementTrajectory = CreateMeasurementTrajectory(N, CircuitDepth, prob)
             # Holds all the entropies for a single p for the amount of trials in a certain system
             entropytrialarray = [] 
             @time for _ in 1:ntrials   
-                # Create Circuit of size N
-                Circuit = CreateCircuit(CircuitDepth, N)
-                MPSSys, entropy = RunMonitoredCircuit(Circuit, MeasurementTrajectory)
+                # Create Circuit for N qubitis (N+1) as there is an ancilla
+                Circuit = CreateCircuitAncilla(CircuitDepth, N+1)
+                # Run the monitored circuit 
+                MPSSys, entropy = RunMonitoredCircuit(Circuit, prob, N, ScrambleDepth)
+                # Keep track of entropies
                 push!(entropytrialarray, entropy)
             end
             push!(smallSEArray, std(entropytrialarray))
@@ -213,11 +296,15 @@ end
 println(zerocount)
 println(onecount)
 
-plot(problist, real.(BigEntropyArray[1]), ylim=(-0.5,5), label="L=6")
+print(real.(BigEntropyArray[1]))
+
+plot(problist, real.(BigEntropyArray[1]), ylim=(0.01,1), label="L=6")
 plot!(problist, real.(BigEntropyArray[2]), label="L=8")
 plot!(problist, real.(BigEntropyArray[3]), label="L=10")
 scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
-ylabel!("Average Entropy")
+ylabel!("Log Scale Average Entropy")
 
+title!("Ancilla + 6 Scramble Layers, Charge Sharpening; ntrials= 200")
+png("Ancilla and Scrambling L=6,8,10 Charge Sharpening Transition Focused 06252024")
 

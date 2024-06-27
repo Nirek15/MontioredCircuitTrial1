@@ -164,7 +164,7 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
     for layer in circuit
 
         # Applying Gates
-        MPSSys = apply(ITensors.ops(layer, s), MPSSys)
+        MPSSys = apply(ITensors.ops(layer, s), MPSSys, cutoff = tol)
 
         # Possible Measurement
         # For each qubit, according to a given probability of measurement, measure it. 
@@ -187,9 +187,11 @@ end
 zerocount = 0
 onecount = 0
 
+tol = 0
+
 let 
     # Tolerance
-    global tol = 1e-50
+    global tol = 1e-4
     # Measurement probabilities
     global problist = LinRange(0, 0.5, 10)
     # Array to hold each size iteration
@@ -199,12 +201,11 @@ let
     # Array of System Sizes
     global SystemSizes = [8,12]
 
-
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 300
+        ntrials = 200
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         smallSEArray = []
@@ -223,6 +224,7 @@ let
             push!(AvgEntropyArray, mean(entropytrialarray))
         end
         
+        
         # Printing Entropy
         for avgentropy in AvgEntropyArray
             println("Entropy: ", avgentropy)
@@ -237,10 +239,12 @@ end
 println(zerocount)
 println(onecount)
 
+
 plot(problist, real.(BigEntropyArray[1]), ylim=(-0.5,5), label="L=8")
 plot!(problist, real.(BigEntropyArray[2]), label="L=12")
-scatter!(problist, real.(BigEntropyArray), label="")
-xlabel!("p")
+xlabel!("Measurement Rate")
 ylabel!("Average Entropy")
+title!("U(1) Gates; ntrials = 200")
 
+png("U(1) Gates with 1e-5 Tolerance")
 
