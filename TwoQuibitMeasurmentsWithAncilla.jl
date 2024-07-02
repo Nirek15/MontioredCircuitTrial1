@@ -211,11 +211,13 @@ function PerformMultiSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
 
 
         if ProjectionDecision == "2Charge"
-            Projection = [("TwoSiteProjectUp", Site1, Site2)]
+            #Projection = [("TwoSiteProjectUp", Site1, Site2)]
+            Projection = [("ProjectUp", Site1), ("ProjectUp", Site2)]
         elseif ProjectionDecision == "1Charge"
             Projection = [("TwoSiteProjectOneCharge", Site1, Site2)]
         elseif ProjectionDecision == "0Charge"
-            Projection = [("TwoSiteProjectDown", Site1, Site2)]
+            #Projection = [("TwoSiteProjectDown", Site1, Site2)]
+            Projection = [("ProjectDown", Site1), ("ProjectDown", Site2)]
         end
         MPSSys = apply(ITensors.ops(Projection, s), MPSSys, cutoff=tol)
         normalize!(MPSSys)
@@ -231,8 +233,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    entangleancilla3 =[("CNOT", 2, 4)]
-    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    #entangleancilla3 =[("CNOT", 2, 4)]
+    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -358,14 +360,14 @@ println(onecount)
 
 print(real.(BigEntropyArray[1]))
 
-plot(problist, real.(BigEntropyArray[1]), ylim=(0.01,1), yaxis=:log10, label="L=6")
+plot(problist, real.(BigEntropyArray[1]), ylim=(0.01,1), label="L=6")
 plot!(problist, real.(BigEntropyArray[2]), label="L=8")
 plot!(problist, real.(BigEntropyArray[3]), label="L=10")
 scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
 ylabel!("Log Scale Average Entropy")
 
-title!("TwoSiteMeasurement + Ancilla + 6 Scramble Layers, Charge Sharpening; ntrials= 1000")
-png("TwoSiteMeasurement and Ancilla and Scrambling, Entanglement 1000 trials")
+title!("TwoSiteMeasurement + Ancilla + 6 Scramble Layers, ChargeSharpening; ntrials= 1000")
+png("TwoSiteMeasurement and Ancilla and Scrambling, ChargeSharpening 1000 trials")
 
 Threads.nthreads()
