@@ -188,8 +188,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    #entangleancilla3 =[("CNOT", 2, 4)]
-    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    entangleancilla3 =[("CNOT", 2, 4)]
+    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -221,7 +221,7 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64, N::Int, ScrambleDepth:
     for layer in circuit
 
         # Applying Gates
-        MPSSys = apply(ITensors.ops(layer, s), MPSSys)
+        MPSSys = apply(ITensors.ops(layer, s), MPSSys, cutoff=tol)
 
         # Possible Measurement
         # For each qubit, according to a given probability of measurement, measure it. 
@@ -247,13 +247,13 @@ let
     # Tolerance
     global tol = 1e-150
     # Measurement probabilities
-    global problist = LinRange(0.05, 0.15, 10)
+    global problist = [0.05]#LinRange(0.05, 0.15, 10)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
     global BigSEArray = []
     # Array of System Sizes
-    global SystemSizes = [6,8,10]
+    global SystemSizes = [8]
     # How many layers of scrambling (2 -> 1 even 1 odd)
     global ScrambleDepth = 6
 

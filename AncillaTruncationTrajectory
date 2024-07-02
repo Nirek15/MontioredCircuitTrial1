@@ -236,13 +236,13 @@ end
 zerocount = 0
 onecount = 0
 tol = 0
-MeasurementTrajectoryForced = [] 
+MeasurementTrajectoryForced = [] #load_object("AncillaMeasurementTrajectoryAreaLaw") 
 
-phi0Array = load_object("AncillaPhi0s.jld2")
-phi1Array = load_object("AncillaPhi1s.jld2")
-phi2Array = load_object("AncillaPhi2s.jld2")
-phi3Array = load_object("AncillaPhi3s.jld2")
-thetaArray = load_object("AncillaThetas.jld2")
+phi0Array = load_object("AncillaPhi0sAreaLaw.jld2")
+phi1Array = load_object("AncillaPhi1sAreaLaw.jld2")
+phi2Array = load_object("AncillaPhi2sAreaLaw.jld2")
+phi3Array = load_object("AncillaPhi3sAreaLaw.jld2")
+thetaArray = load_object("AncillaThetasAreaLaw.jld2")
 
 GateCount = 0
 
@@ -250,7 +250,7 @@ let
     # Tolerance
     #global tol = 1e-150
     # Measurement probabilities
-    global problist = [0.05] #LinRange(0.05, 0.15, 10)
+    global problist = [0.13] #LinRange(0.05, 0.15, 10)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
@@ -271,7 +271,7 @@ let
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 10
+        ntrials = 1
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         smallSEArray = []
@@ -279,7 +279,7 @@ let
         # Create Circuit for N qubitis (N+1) as there is an ancilla
         Circuit = CreateCircuitAncilla(CircuitDepth, N+1)
         #CircuitMTrajectory = nothing
-        CircuitMTrajectory = load_object("AncillaMeasurementTrajectory.jld2")
+        CircuitMTrajectory = load_object("AncillaMeasurementTrajectoryAreaLaw.jld2") 
 
         for tolerance in ToleranceArray
             global tol = tolerance
@@ -287,6 +287,7 @@ let
             SmallDimArray = []
             @time for _ in 1:ntrials 
                 MPSSys, entropy = RunMonitoredCircuit(Circuit, problist[1], N, ScrambleDepth, CircuitMTrajectory)
+                println(entropy)
                 push!(entropytrialarray, entropy)
                 push!(SmallDimArray, maxlinkdim(MPSSys))
                 global GateCount = 0
@@ -323,25 +324,24 @@ end
 
 print(MeasurementTrajectoryForced)
 
-#save_object("AncillaMeasurementTrajectory.jld2", MeasurementTrajectoryForced)
-#save_object("AncillaPhi0s.jld2", phi0Array)
-#save_object("AncillaPhi1s.jld2", phi1Array)
-#save_object("AncillaPhi2s.jld2", phi2Array)
-#save_object("AncillaPhi3s.jld2", phi3Array)
-#save_object("AncillaThetas.jld2", thetaArray)
+#save_object("AncillaMeasurementTrajectoryAreaLaw.jld2", MeasurementTrajectoryForced)
+#save_object("AncillaPhi0sAreaLaw.jld2", phi0Array)
+#save_object("AncillaPhi1sAreaLaw.jld2", phi1Array)
+#save_object("AncillaPhi2sAreaLaw.jld2", phi2Array)
+#save_object("AncillaPhi3sAreaLaw.jld2", phi3Array)
+#save_object("AncillaThetasAreaLaw.jld2", thetaArray)
 
-plot(log()ToleranceArray, BigEntropyArray, label="L=8")
+plot(log10.(ToleranceArray), BigEntropyArray, label="L=8")
 scatter!(log10.(ToleranceArray), BigEntropyArray, label="")
 xlabel!("log(Tolerance)")
 ylabel!("Average Entropy for p = 0.05")
 title!("One Circuit Entropy, Measurement Trajectory Setup")
-png("FixedCircuitToleranceVsEntropy(1e-10to1e-1)LogSpaced100points")
+png("AncillaAreaLawFixedCircuitToleranceVsEntropy(1e-150to1e-1)LogSpaced100points")
 
 
-plot(ToleranceArray, BigDimArray, label="L=8")
+plot(log10.(ToleranceArray), BigDimArray, label="L=8")
 scatter!(log10.(ToleranceArray), BigDimArray, label="")
 xlabel!("log(Tolerance)")
 ylabel!("Max Bond Dimension")
 title!("One Circuit BondDim, Measurement Trajectory Setup")
-png("FixedCircuitToleranceVsBondDim(1e-10to1e-1)LogSpaced100points")
-
+png("AncillaAreaLawFixedCircuitToleranceVsBondDim(1e-10to1e-1)LogSpaced100points")
