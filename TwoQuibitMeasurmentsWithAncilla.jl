@@ -34,10 +34,8 @@ end
 function ITensors.op(::OpName"TwoSiteProjectOneCharge", ::SiteType"S=1/2", s1::Index, s2::Index)
 
     Matrix = zeros((4,4))
-    Matrix[2,2] = 1/2
-    Matrix[2,3] = -1/2
-    Matrix[3,2] = -1/2
-    Matrix[3,3] = 1/2
+    Matrix[2,2] = 1
+    Matrix[3,3] = 1
 
     return itensor(Matrix, s2', s1', s2, s1)
 end
@@ -233,8 +231,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    #entangleancilla3 =[("CNOT", 2, 4)]
-    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    entangleancilla3 =[("CNOT", 2, 4)]
+    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -305,9 +303,9 @@ onecount = 0
 
 let 
     # Tolerance
-    global tol = 5e-4
+    global tol = 5e-5
     # Measurement probabilities
-    global problist = LinRange(0.05, 0.15, 20)
+    global problist = LinRange(0.05, 0.25, 20)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
@@ -365,9 +363,9 @@ plot!(problist, real.(BigEntropyArray[2]), label="L=8")
 plot!(problist, real.(BigEntropyArray[3]), label="L=10")
 scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
-ylabel!("Log Scale Average Entropy")
+ylabel!("Average Entropy")
 
-title!("TwoSiteMeasurement + Ancilla + 6 Scramble Layers, ChargeSharpening; ntrials= 1000")
-png("TwoSiteMeasurement and Ancilla and Scrambling, ChargeSharpening 1000 trials")
+title!("NewProjectorTwoSiteMeasurement, 6 Scramble Layers, Entanglement")
+png("NewProjectorTwoSiteMeasurement and Ancilla and Scrambling, Entanglement 1000 trials, focused p")
 
 Threads.nthreads()

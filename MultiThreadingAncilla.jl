@@ -222,9 +222,9 @@ onecount = 0
 
 let 
     # Tolerance
-    global tol = 5e-4
+    global tol = 5e-5
     # Measurement probabilities
-    global problist = LinRange(0.05, 0.15, 20)
+    global problist = LinRange(0.05, 0.25, 20)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
@@ -276,15 +276,15 @@ println(onecount)
 
 print(real.(BigEntropyArray[1]))
 
-plot(problist, real.(BigEntropyArray[1]), ylim=(0.01,1), yaxis=:log10,  label="L=6")
+plot(problist, real.(BigEntropyArray[1]), ylim=(0.01,1), label="L=6")
 plot!(problist, real.(BigEntropyArray[2]), label="L=8")
 plot!(problist, real.(BigEntropyArray[3]), label="L=10")
 scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
-ylabel!("Log Scale Average Entropy")
+ylabel!("Average Entropy")
 
 title!("Ancilla + 6 Scramble Layers, Charge Sharpening; ntrials= 1000")
-png("1000 Trials, Ancilla and Scrambling L=6,8,10 Charge Sharpening Transition Focused 06282024")
+png("1000 Trials, Ancilla and Scrambling L=6,8,10 Entanglement")
 
 Threads.nthreads()
 
