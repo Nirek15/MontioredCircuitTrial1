@@ -10,6 +10,7 @@ using StatsBase
 using StaticArrays
 import ITensors: op
 using Distributions
+using JLD2
 
 
 ITensors.op(::OpName"ProjectUp",::SiteType"S=1/2") = [1 0; 0 0]
@@ -165,8 +166,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    entangleancilla3 =[("CNOT", 2, 4)]
-    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    #entangleancilla3 =[("CNOT", 2, 4)]
+    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -224,7 +225,7 @@ let
     # Tolerance
     global tol = 5e-5
     # Measurement probabilities
-    global problist = LinRange(0.05, 0.25, 20)
+    global problist = LinRange(0.0, 0.5, 20)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
@@ -233,6 +234,8 @@ let
     global SystemSizes = [6,8,10]
     # How many layers of scrambling (2 -> 1 even 1 odd)
     global ScrambleDepth = 6
+    # Variance
+    global BigVarArray = []
 
 
     for N in SystemSizes
@@ -243,6 +246,9 @@ let
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         smallSEArray = []
+        SmallVarArray = []
+        
+
         
         for prob in problist
             # Holds all the entropies for a single p for the amount of trials in a certain system
@@ -258,6 +264,7 @@ let
             end
             push!(smallSEArray, std(entropytrialarray))
             push!(AvgEntropyArray, mean(entropytrialarray))
+            push!(SmallVarArray, var(entropytrialarray))
         end
         
         # Printing Entropy
@@ -268,23 +275,39 @@ let
         # Bring the entropy array to the array for each system size
         push!(BigEntropyArray, AvgEntropyArray)
         push!(BigSEArray, smallSEArray)
+        push!(BigVarArray, SmallVarArray)
     end
 end
 
 println(zerocount)
 println(onecount)
 
-print(real.(BigEntropyArray[1]))
-
-plot(problist, real.(BigEntropyArray[1]), ylim=(0.01,1), label="L=6")
+plot(problist, real.(BigEntropyArray[1]), label="L=6")
 plot!(problist, real.(BigEntropyArray[2]), label="L=8")
 plot!(problist, real.(BigEntropyArray[3]), label="L=10")
 scatter!(problist, real.(BigEntropyArray), label="")
 xlabel!("p")
 ylabel!("Average Entropy")
 
-title!("Ancilla + 6 Scramble Layers, Charge Sharpening; ntrials= 1000")
-png("1000 Trials, Ancilla and Scrambling L=6,8,10 Entanglement")
+
+save_object("ChargeSharpeningSingleSiteWideEntropies.jld2", BigEntropyArray)
+save_object("ChargeSharpeningSingleSiteWideStandardError.jld2", BigSEArray)
+save_object("ChargeSharpeningSingleSiteWideVariance.jld2", BigVarArray)
+save_object("ChargeSharpeningSingleSiteWideProbList.jld2", problist)
+
+title!("ChargeSharpening SingleSite Wide Ancilla Entanglement")
+png("ChargeSharpening SingleSite Wide  and Ancilla and Scrambling 1000 trials")
+
+Threads.nthreads()
+
+plot(problist, real.(BigVarArray[1]), label="L=6")
+plot!(problist, real.(BigVarArray[2]), label="L=8")
+plot!(problist, real.(BigVarArray[3]), label="L=10")
+scatter!(problist, real.(BigVarArray), label="")
+xlabel!("p")
+ylabel!("Variance in Entropy")
+title!("ChargeSharpening SingleSite Wide  Focused Variance")
+png("ChargeSharpening SingleSite Wide and Ancilla and Scrambling, Variance 1000 trials")
 
 Threads.nthreads()
 
