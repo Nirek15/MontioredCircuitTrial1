@@ -21,7 +21,7 @@ ITensors.op(::OpName"ProjectDown",::SiteType"S=1/2") = [0 0; 0 1]
 
 function ITensors.op(::OpName"ThreeSiteProjectTwoCharge", ::SiteType"S=1/2", s1::Index, s2::Index, s3::Index)
 
-    Matrix = zeros((16,16))
+    Matrix = zeros((8,8))
     Matrix[2,2] = 1
     Matrix[3,3] = 1
     Matrix[5,5] = 1
@@ -29,9 +29,9 @@ function ITensors.op(::OpName"ThreeSiteProjectTwoCharge", ::SiteType"S=1/2", s1:
     return itensor(Matrix, s3', s2', s1', s3, s2, s1)
 end
 
-function ITensors.op(::OpName"ThreeSiteProjectOneCharge", ::SiteType"S=1/2", s1::Index, s2::Index, s3::Index, s4::Index)
+function ITensors.op(::OpName"ThreeSiteProjectOneCharge", ::SiteType"S=1/2", s1::Index, s2::Index, s3::Index)
 
-    Matrix = zeros((16,16))
+    Matrix = zeros((8,8))
     Matrix[4,4] = 1
     Matrix[6,6] = 1
     Matrix[7,7] = 1
@@ -246,7 +246,7 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
         # Applying the scrambling
         
         for scramblelayer in ScrambleCircuit
-            MPSSys = apply(ITensors.ops(scramblelayer, s), MPSSys)
+            MPSSys = apply(ITensors.ops(scramblelayer, s), MPSSys, cutoff=tol)
         end
     end
 
@@ -277,19 +277,36 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64, N::Int, ScrambleDepth:
         MultiSiteMeasurements = []
 
         if rem(N,4) == 0 
-            for site in 2:3:N-2
-                if rand() < p
-                    push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+            if iseven(i)
+                for site in 4:3:N
+                    if rand() < p
+                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                    end
+                end
+            else 
+                for site in 2:3:N-2
+                    if rand() < p
+                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                    end
                 end
             end
+            MPSSys = PerformThreeSiteMeasurement!(MPSSys, MultiSiteMeasurements, s)
         else
-            for site in 2:3:N-1
-                if rand() < p
-                    push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+            if iseven(i)
+                for site in 3:3:N-1
+                    if rand() < p
+                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                    end
+                end
+            else 
+                for site in 2:3:N-1
+                    if rand() < p
+                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                    end
                 end
             end
+            MPSSys = PerformThreeSiteMeasurement!(MPSSys, MultiSiteMeasurements, s)
         end
-        MPSSys = PerformFourSiteMeasurement!(MPSSys, MultiSiteMeasurements, s)
     end
     return MPSSys, VonNeumannEntropy(MPSSys)
 end
@@ -307,7 +324,7 @@ let
     # SE Array
     global BigSEArray = []
     # Array of System Sizes
-    global SystemSizes = [8, 10]
+    global SystemSizes = [10]
     # How many layers of scrambling (2 -> 1 even 1 odd)
     global ScrambleDepth = 6
     # Variance
@@ -318,7 +335,7 @@ let
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 100
+        ntrials = 1000
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         smallSEArray = []
@@ -359,7 +376,7 @@ println(onecount)
 
 print(real.(BigEntropyArray[1]))
 
-plot(problist, real.(BigEntropyArray[1]), label="L=6")
+plot(problist, real.(BigEntropyArray[1]), label="L=10")
 plot!(problist, real.(BigEntropyArray[2]), label="L=8")
 plot!(problist, real.(BigEntropyArray[3]), label="L=10")
 scatter!(problist, real.(BigEntropyArray), label="")
@@ -367,59 +384,60 @@ xlabel!("p")
 ylabel!("Average Entropy")
 
 
-save_object("ChargeSharpeningOriginalSetupEntropies.jld2", BigEntropyArray)
-save_object("ChargeSharpeningOriginalSetupStandardError.jld2", BigSEArray)
-save_object("ChargeSharpeningOriginalSetupVariance.jld2", BigVarArray)
-save_object("ChargeSharpeningOriginalSetupProbList.jld2", problist)
+save_object("ChargeSharpeningThreeSiteL=10Entropies.jld2", BigEntropyArray)
+save_object("ChargeSharpeningThreeSiteL=10StandardError.jld2", BigSEArray)
+save_object("ChargeSharpeningThreeSiteL=10Variance.jld2", BigVarArray)
+save_object("ChargeSharpeningThreeSiteL=10ProbList.jld2", problist)
 
-title!("OriginalSetup, ChargeSharpening, 6 Scramble Layers")
-png("OriginalSetup ,ChargeSharpening, and Ancilla and Scrambling 1000 trials")
+title!("ThreeSite, L=10 Switching Setup, ChargeSharpening, 6 Scramble Layers")
+png("ThreeSite L=10 Switching Setup, ChargeSharpening, and Ancilla and Scrambling 1000 trials")
 
 Threads.nthreads()
 
 
-plot(problist, real.(BigVarArray[1]), label="L=8")
-plot!(problist, real.(BigVarArray[2]), label="L=10")
+plot(problist, real.(BigVarArray[1]), label="L=10")
+plot!(problist, real.(BigVarArray[2]), label="L=8")
 plot!(problist, real.(BigVarArray[3]), label="L=10")
 scatter!(problist, real.(BigVarArray), label="")
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("OriginalSetup Variance ChargeSharpening")
-png("OriginalSetup, ChargeSharpening and Ancilla and Scrambling, Variance 1000 trials")
+title!("ThreeSite, L=10 Switching Setup, Variance ChargeSharpening")
+png("ThreeSite, L=10 Switching Setup, ChargeSharpening and Ancilla and Scrambling, Variance 1000 trials")
 
 
 OriginalMeasurementVariance = load_object("ChargeSharpeningOriginalSetupVariance.jld2")
 SingleSiteMeasurementVariance = load_object("ChargeSharpeningSingleSiteWideVariance.jld2")
+ThreeSiteMeasurementVariance = load_object("ChargeSharpeningThreeSiteL=10Variance.jld2")
 
-plot(problist, OriginalMeasurementVariance[3], label="L= Original Two Site" )
-plot!(problist, SingleSiteMeasurementVariance[3], label="L= SingleSite Measurements")
+plot(problist, OriginalMeasurementVariance[3], label="Original Two Site" )
+plot!(problist, SingleSiteMeasurementVariance[3], label="Single Site Measurements")
+plot!(problist, ThreeSiteMeasurementVariance[1], label="Three Site Measurements")
 scatter!(problist, OriginalMeasurementVariance[3], label="")
 scatter!(problist, SingleSiteMeasurementVariance[3], label="" )
+scatter!(problist, ThreeSiteMeasurementVariance[1], label="" )
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("Charge Sharpening L = 10")
-png("Charge Sharpening L=10 Single vs Two Variance")
+title!("Charge Sharpening Varaince L = 10")
+png("Charge Sharpening L=10 Single vs Two vs Three Variance")
 
-plot(problist, OriginalMeasurementVariance[2], label="L=Original Two Site" )
-plot!(problist, SingleSiteMeasurementVariance[2], label="L=Even Measurements")
+plot(problist, OriginalMeasurementVariance[2], label="L= Original Two Site", legend=:topright)
+plot!(problist, SingleSiteMeasurementVariance[2], label="L = Single Site Measurements")
+plot!(problist, ThreeSiteMeasurementVariance[1], label="L = Three Site Measurements")
 scatter!(problist, OriginalMeasurementVariance[2], label="")
 scatter!(problist, SingleSiteMeasurementVariance[2], label="" )
+scatter!(problist, ThreeSiteMeasurementVariance[1], label="" )
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("Charge Sharpening L = 8 ")
-png("Charge Sharpening L=8 Single vs Two Variance")
+title!("Charge Sharpening Variance L = 8")
+png("Charge Sharpening L= 8 Single vs Two vs Three Variance With Switching")
 
-plot(problist, OriginalMeasurementVariance[1], label="L=Original Two Site" )
-plot!(problist, SingleSiteMeasurementVariance[1], label="L=Even Measurements")
+plot(problist, OriginalMeasurementVariance[1], label="L= Original Two Site" )
+plot!(problist, SingleSiteMeasurementVariance[1], label="L = Single Site Measurements")
+plot!(problist, ThreeSiteMeasurementVariance[1], label="L = Three Site Measurements")
 scatter!(problist, OriginalMeasurementVariance[1], label="")
 scatter!(problist, SingleSiteMeasurementVariance[1], label="" )
+scatter!(problist, ThreeSiteMeasurementVariance[1], label="" )
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("Charge Sharpening ")
-png("Charge Sharpening L=6 Single vs Two Setups")
-
-
-N = 11
-for i in 2:3:N-2
-    print(i)
-end
+title!("Charge Sharpening Variance L = 6")
+png("Charge Sharpening L = 6 Single vs Two vs Three Variance")
