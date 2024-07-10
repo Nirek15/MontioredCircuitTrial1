@@ -185,7 +185,7 @@ function PerformSingleSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
     return normalize!(MPSSys)
 end
 
-function PerformMultiSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
+function PerformTwoSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
     for MeasurementTuple in MeasurementSites
         Site1 = MeasurementTuple[1]
         Site2 = MeasurementTuple[2]
@@ -233,8 +233,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    #entangleancilla3 =[("CNOT", 2, 4)]
-    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    entangleancilla3 =[("CNOT", 2, 4)]
+    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -289,14 +289,14 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64, N::Int, ScrambleDepth:
                     push!(MultiSiteMeasurements, (site, site+1))
                 end
             end
-            MPSSys = PerformMultiSiteMeasurement!(MPSSys, MultiSiteMeasurements, s)
+            MPSSys = PerformTwoSiteMeasurement!(MPSSys, MultiSiteMeasurements, s)
         else
             for site in 3:2:N-1
                 if rand() < p
                     push!(MultiSiteMeasurements, (site, site+1))
                 end
             end
-            MPSSys = PerformMultiSiteMeasurement!(MPSSys, MultiSiteMeasurements, s)
+            MPSSys = PerformTwoSiteMeasurement!(MPSSys, MultiSiteMeasurements, s)
         
             #=
             SingleSiteMeasurements = []
@@ -385,13 +385,13 @@ xlabel!("p")
 ylabel!("Average Entropy")
 
 
-save_object("ChargeSharpeningOriginalSetupEntropies.jld2", BigEntropyArray)
-save_object("ChargeSharpeningOriginalSetupStandardError.jld2", BigSEArray)
-save_object("ChargeSharpeningOriginalSetupVariance.jld2", BigVarArray)
-save_object("ChargeSharpeningOriginalSetupProbList.jld2", problist)
+save_object("EntagnlementTwoSiteWideEntropies.jld2", BigEntropyArray)
+save_object("EntagnlementTwoSiteWideError.jld2", BigSEArray)
+save_object("EntagnlementTwoSiteWideVariance.jld2", BigVarArray)
+save_object("EntagnlementTwoSiteWideProbList.jld2", problist)
 
-title!("OriginalSetup, ChargeSharpening, 6 Scramble Layers")
-png("OriginalSetup ,ChargeSharpening, and Ancilla and Scrambling 1000 trials")
+title!("Two Site Measurements, Entanglement, 6 Scramble Layers")
+png("Two Site Measurements ,Entanglement Transition, and Ancilla and Scrambling 1000 trials")
 
 Threads.nthreads()
 
@@ -402,8 +402,8 @@ plot!(problist, real.(BigVarArray[3]), label="L=10")
 scatter!(problist, real.(BigVarArray), label="")
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("OriginalSetup Variance ChargeSharpening")
-png("OriginalSetup, ChargeSharpening and Ancilla and Scrambling, Variance 1000 trials")
+title!("Two Site Measurement Variance Entanglement Tranition")
+png("Two Site Measurement, Entanglement Trasnition and Ancilla and Scrambling, Variance 1000 trials")
 
 
 OriginalMeasurementVariance = load_object("ChargeSharpeningOriginalSetupVariance.jld2")

@@ -166,8 +166,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    #entangleancilla3 =[("CNOT", 2, 4)]
-    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    entangleancilla3 =[("CNOT", 2, 4)]
+    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -290,13 +290,13 @@ xlabel!("p")
 ylabel!("Average Entropy")
 
 
-save_object("ChargeSharpeningSingleSiteWideEntropies.jld2", BigEntropyArray)
-save_object("ChargeSharpeningSingleSiteWideStandardError.jld2", BigSEArray)
-save_object("ChargeSharpeningSingleSiteWideVariance.jld2", BigVarArray)
-save_object("ChargeSharpeningSingleSiteWideProbList.jld2", problist)
+save_object("EntagnlementSingleSiteWideEntropies.jld2", BigEntropyArray)
+save_object("EntagnlementSingleSiteWideStandardError.jld2", BigSEArray)
+save_object("EntagnlementSingleSiteWideVariance.jld2", BigVarArray)
+save_object("EntagnlementSingleSiteWideProbList.jld2", problist)
 
-title!("ChargeSharpening SingleSite Wide Ancilla Entanglement")
-png("ChargeSharpening SingleSite Wide  and Ancilla and Scrambling 1000 trials")
+title!("Single Site Measurements, Entanglement Transition")
+png("Entanglement Single Site Measurement Wide and Ancilla and Scrambling 1000 trials")
 
 Threads.nthreads()
 
@@ -306,8 +306,8 @@ plot!(problist, real.(BigVarArray[3]), label="L=10")
 scatter!(problist, real.(BigVarArray), label="")
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("ChargeSharpening SingleSite Wide  Focused Variance")
-png("ChargeSharpening SingleSite Wide and Ancilla and Scrambling, Variance 1000 trials")
+title!("Entanglement Single Site Measurement Entropy Variance")
+png("Entanglement Single Site Measurement Wide and Ancilla and Scrambling, Entropy Variance 1000 trials")
 
 Threads.nthreads()
 

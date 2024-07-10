@@ -236,8 +236,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    #entangleancilla3 =[("CNOT", 2, 4)]
-    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    entangleancilla3 =[("CNOT", 2, 4)]
+    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -324,7 +324,7 @@ let
     # SE Array
     global BigSEArray = []
     # Array of System Sizes
-    global SystemSizes = [10]
+    global SystemSizes = [6,8,10]
     # How many layers of scrambling (2 -> 1 even 1 odd)
     global ScrambleDepth = 6
     # Variance
@@ -384,13 +384,13 @@ xlabel!("p")
 ylabel!("Average Entropy")
 
 
-save_object("ChargeSharpeningThreeSiteL=10Entropies.jld2", BigEntropyArray)
-save_object("ChargeSharpeningThreeSiteL=10StandardError.jld2", BigSEArray)
-save_object("ChargeSharpeningThreeSiteL=10Variance.jld2", BigVarArray)
-save_object("ChargeSharpeningThreeSiteL=10ProbList.jld2", problist)
+save_object("EntagnlementThreeSiteWideEntropies.jld2", BigEntropyArray)
+save_object("EntagnlementThreeSiteWideStandardError.jld2", BigSEArray)
+save_object("EntagnlementThreeSiteWideVariance.jld2", BigVarArray)
+save_object("EntagnlementThreeSiteWideProbList.jld2", problist)
 
-title!("ThreeSite, L=10 Switching Setup, ChargeSharpening, 6 Scramble Layers")
-png("ThreeSite L=10 Switching Setup, ChargeSharpening, and Ancilla and Scrambling 1000 trials")
+title!("Three Site Switching Setup, Entanglement Transition, 6 Scramble Layers")
+png("Three Site Switching Setup, Entanglement Transition, and Ancilla and Scrambling 1000 trials")
 
 Threads.nthreads()
 
@@ -401,43 +401,54 @@ plot!(problist, real.(BigVarArray[3]), label="L=10")
 scatter!(problist, real.(BigVarArray), label="")
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("ThreeSite, L=10 Switching Setup, Variance ChargeSharpening")
-png("ThreeSite, L=10 Switching Setup, ChargeSharpening and Ancilla and Scrambling, Variance 1000 trials")
+title!("ThreeSiteSwitching Setup, Entropy Variance, Entanglement Transition")
+png("ThreeSite, Switching Setup, Entanglement Transition and Ancilla and Scrambling, Variance 1000 trials")
 
 
-OriginalMeasurementVariance = load_object("ChargeSharpeningOriginalSetupVariance.jld2")
-SingleSiteMeasurementVariance = load_object("ChargeSharpeningSingleSiteWideVariance.jld2")
-ThreeSiteMeasurementVariance = load_object("ChargeSharpeningThreeSiteL=10Variance.jld2")
+SingleSiteMeasurementVariance = load_object("EntagnlementSingleSiteWideVariance.jld2")
+TwoSiteMeasurementVariance = load_object("EntagnlementTwoSiteWideVariance.jld2")
+ThreeSiteMeasurementVariance = load_object("EntagnlementThreeSiteWideVariance.jld2")
 
-plot(problist, OriginalMeasurementVariance[3], label="Original Two Site" )
-plot!(problist, SingleSiteMeasurementVariance[3], label="Single Site Measurements")
-plot!(problist, ThreeSiteMeasurementVariance[1], label="Three Site Measurements")
-scatter!(problist, OriginalMeasurementVariance[3], label="")
-scatter!(problist, SingleSiteMeasurementVariance[3], label="" )
-scatter!(problist, ThreeSiteMeasurementVariance[1], label="" )
+CSSingleSiteMeasurementVariance = load_object("ChargeSharpeningSingleSiteWideVariance.jld2")
+CSTwoSiteMeasurementVariance = load_object("ChargeSharpeningOriginalSetupVariance.jld2")
+L8CSThreeSiteMeasurementVariance = load_object("ChargeSharpeningThreeSiteL=10Variance.jld2")
+L10CSThreeSiteMeasurementVariance = load_object("ChargeSharpeningThreeSiteL=10Variance.jld2")
+
+plot(problist, SingleSiteMeasurementVariance[2], label="Single Site ET", linestyle=:dash)
+plot!(problist, TwoSiteMeasurementVariance[2], label="Two Site ET", linestyle=:dash)
+plot!(problist, ThreeSiteMeasurementVariance[2], label="Three Site ET", linestyle=:dash)
+
+plot!(problist, CSSingleSiteMeasurementVariance[2], label="Single Site CS")
+plot!(problist, CSTwoSiteMeasurementVariance[2], label="Two Site CS")
+plot!(problist, L8CSThreeSiteMeasurementVariance[1], label="Three Site CS")
+
+scatter!(problist, SingleSiteMeasurementVariance[2], label="")
+scatter!(problist, TwoSiteMeasurementVariance[2], label="" )
+scatter!(problist, ThreeSiteMeasurementVariance[2], label="" )
+
+scatter!(problist, CSSingleSiteMeasurementVariance[2], label="")
+scatter!(problist, CSTwoSiteMeasurementVariance[2], label="" )
+scatter!(problist, L8CSThreeSiteMeasurementVariance[1], label="" )
+
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("Charge Sharpening Varaince L = 10")
-png("Charge Sharpening L=10 Single vs Two vs Three Variance")
+title!("CS vs ET Entropy Varaince L = 8")
+png("CS vs ET Entropy Variance  L = 8, 1000 trials, wide")
 
-plot(problist, OriginalMeasurementVariance[2], label="L= Original Two Site", legend=:topright)
-plot!(problist, SingleSiteMeasurementVariance[2], label="L = Single Site Measurements")
-plot!(problist, ThreeSiteMeasurementVariance[1], label="L = Three Site Measurements")
-scatter!(problist, OriginalMeasurementVariance[2], label="")
-scatter!(problist, SingleSiteMeasurementVariance[2], label="" )
-scatter!(problist, ThreeSiteMeasurementVariance[1], label="" )
+
+
+
+
+plot(problist, SingleSiteMeasurementVariance[3], label="Single Site ET", linestyle=:dash)
+plot!(problist, TwoSiteMeasurementVariance[3], label="Two Site ET", linestyle=:dash)
+plot!(problist, ThreeSiteMeasurementVariance[3], label="Three Site ET", linestyle=:dash)
+
+plot!(problist, CSSingleSiteMeasurementVariance[3], label="Single Site CS")
+plot!(problist, CSTwoSiteMeasurementVariance[3], label="Two Site CS")
+plot!(problist, L10CSThreeSiteMeasurementVariance[1], label="Three Site CS")
+
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("Charge Sharpening Variance L = 8")
-png("Charge Sharpening L= 8 Single vs Two vs Three Variance With Switching")
+title!("CS vs ET Entropy Varaince L = 10")
+png("CS vs ET Entropy Variance  L = 10, 1000 trials, wide")
 
-plot(problist, OriginalMeasurementVariance[1], label="L= Original Two Site" )
-plot!(problist, SingleSiteMeasurementVariance[1], label="L = Single Site Measurements")
-plot!(problist, ThreeSiteMeasurementVariance[1], label="L = Three Site Measurements")
-scatter!(problist, OriginalMeasurementVariance[1], label="")
-scatter!(problist, SingleSiteMeasurementVariance[1], label="" )
-scatter!(problist, ThreeSiteMeasurementVariance[1], label="" )
-xlabel!("p")
-ylabel!("Variance in Entropy")
-title!("Charge Sharpening Variance L = 6")
-png("Charge Sharpening L = 6 Single vs Two vs Three Variance")
