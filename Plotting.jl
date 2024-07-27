@@ -1,8 +1,10 @@
-SingleSiteMeasurementVariance = load_object("810CorrectAncillaSetupETOneSiteWideEntropyVariance.jld2")
+problist = LinRange(0.0, 0.5, 10)
+
+SingleSiteMeasurementVariance = load_object("8GateTrajectoryAverageETOneSiteWideEntropyVariance.jld2")
 TwoSiteMeasurementVariance = load_object("810CorrectAncillaSetupETTwoSiteWideEntropyVarianceHighTol.jld2")
 ThreeSiteMeasurementVariance = load_object("EntagnlementThreeSiteWideVariance.jld2")
 
-CSSingleSiteMeasurementVariance = load_object("810CorrectAncillaSetupCSOneSiteWideEntropyVariance.jld2")
+CSSingleSiteMeasurementVariance = load_object("8GateTrajectoryAverageCSOneSiteWideEntropyVariance.jld2")
 CSTwoSiteMeasurementVariance = load_object("810CorrectAncillaSetupCSTwoSiteWideEntropyVariance.jld2")
 L8CSThreeSiteMeasurementVariance = load_object("ChargeSharpeningThreeSiteL=10Variance.jld2")
 L10CSThreeSiteMeasurementVariance = load_object("ChargeSharpeningThreeSiteL=10Variance.jld2")
@@ -11,7 +13,7 @@ plot(problist, SingleSiteMeasurementVariance[1], label="Single Site ET", linesty
 plot!(problist, TwoSiteMeasurementVariance[1], label="Two Site ET", linestyle=:dash)
 plot!(problist, ThreeSiteMeasurementVariance[2], label="Three Site ET", linestyle=:dash)
 
-plot(problist, CSSingleSiteMeasurementVariance[1], label="Single Site CS")
+plot!(problist, CSSingleSiteMeasurementVariance[1], label="Single Site CS")
 plot!(problist, CSTwoSiteMeasurementVariance[1], label="Two Site CS")
 plot!(problist, L8CSThreeSiteMeasurementVariance[1], label="Three Site CS")
 
