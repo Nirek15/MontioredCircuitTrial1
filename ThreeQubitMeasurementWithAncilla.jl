@@ -11,32 +11,49 @@ using StaticArrays
 import ITensors: op
 using Distributions
 using JLD2
+import Base.product
 
 
 
 ITensors.op(::OpName"ProjectUp",::SiteType"S=1/2") = [1 0; 0 0]
 ITensors.op(::OpName"ProjectDown",::SiteType"S=1/2") = [0 0; 0 1]
 
+function ITensors.op(::OpName"ThreeSiteProjectThreeCharge", ::SiteType"S=1/2", s1::Index, s2::Index, s3::Index)
+
+    TempMatrix = zeros((8,8))
+    TempMatrix[1,1] = 1
+
+    return itensor(TempMatrix, s3', s2', s1', s3, s2, s1)
+end
+
+function ITensors.op(::OpName"ThreeSiteProjectNoCharge", ::SiteType"S=1/2", s1::Index, s2::Index, s3::Index)
+
+    TempMatrix = zeros((8,8))
+    TempMatrix[8,8] = 1
+
+    return itensor(TempMatrix, s3', s2', s1', s3, s2, s1)
+end
+
 
 
 function ITensors.op(::OpName"ThreeSiteProjectTwoCharge", ::SiteType"S=1/2", s1::Index, s2::Index, s3::Index)
 
-    Matrix = zeros((8,8))
-    Matrix[2,2] = 1
-    Matrix[3,3] = 1
-    Matrix[5,5] = 1
+    TempMatrix = zeros((8,8))
+    TempMatrix[2,2] = 1
+    TempMatrix[3,3] = 1
+    TempMatrix[5,5] = 1
 
-    return itensor(Matrix, s3', s2', s1', s3, s2, s1)
+    return itensor(TempMatrix, s3', s2', s1', s3, s2, s1)
 end
 
 function ITensors.op(::OpName"ThreeSiteProjectOneCharge", ::SiteType"S=1/2", s1::Index, s2::Index, s3::Index)
 
-    Matrix = zeros((8,8))
-    Matrix[4,4] = 1
-    Matrix[6,6] = 1
-    Matrix[7,7] = 1
+    TempMatrix = zeros((8,8))
+    TempMatrix[4,4] = 1
+    TempMatrix[6,6] = 1
+    TempMatrix[7,7] = 1
 
-    return itensor(Matrix, s3', s2', s1', s3, s2, s1)
+    return itensor(TempMatrix, s3', s2', s1', s3, s2, s1)
 end
 
 # Define a custom sine distribution
@@ -135,51 +152,19 @@ function CreateCircuitAncilla(depth::Int, N::Int)
     for i in 1:depth
         if isodd(i)
             oddeventemplayer = []
-            for j in 2:2:N-1
-                push!(oddeventemplayer, ("ChargeConservingUnitaryGate", j, j+1))
+            for j in 2:2:N-1 
+                push!(oddeventemplayer, ("ChargeConservingUnitaryGate2", j, j+1))
             end
             push!(Circuit, oddeventemplayer)
         else
             evenoddtemplayer = []
             for j in 3:2:N-2
-                push!(evenoddtemplayer, ("ChargeConservingUnitaryGate", j, j+1))
+                push!(evenoddtemplayer, ("ChargeConservingUnitaryGate2", j, j+1))
             end
             push!(Circuit, evenoddtemplayer)
         end
     end
     return Circuit
-end
-
-function PerformSingleSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
-
-    for site in MeasurementSites
-        normalize!(MPSSys)
-        orthogonalize!(MPSSys, site)
-        # Create a density matrix for the qubit we are measuring
-        MPSMeasuring = MPSSys[site]
-        SiteDensityMatrix = prime(MPSMeasuring, s) * dag(MPSMeasuring)
-        DensityMatrix = [SiteDensityMatrix[1] SiteDensityMatrix[2]; SiteDensityMatrix[3] SiteDensityMatrix[4]]
-
-        # Computer decides if it gets projected up or down based on probability of down
-        if rand() < real.(DensityMatrix[1])
-            os = OpSum()
-            os += "ProjectUp", site
-            ProjectUpMPO = MPO(os, s)
-            MPSSys = apply(ProjectUpMPO, MPSSys, cutoff=tol)
-            addzero()
-        else 
-            os = OpSum()
-            os += "ProjectDown", site
-            ProjectDownMPO = MPO(os, s)
-            MPSSys = apply(ProjectDownMPO, MPSSys, cutoff=tol)
-            addone()
-        end
-        normalize!(MPSSys)
-    end
-
-    noprime!(MPSSys)
-
-    return normalize!(MPSSys)
 end
 
 function PerformThreeSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
@@ -200,6 +185,7 @@ function PerformThreeSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
         BornProbabilities = []
         for i = 1:2, j = 1:2, k = 1:2
             push!(BornProbabilities, DensityMatrix[s[Site1] => i, s[Site1]' => i, s[Site2] => j, s[Site2]' => j, s[Site3] => k, s[Site3]' => k])
+    
         end
         BornProbabilities = real.(BornProbabilities)
 
@@ -214,13 +200,13 @@ function PerformThreeSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
 
 
         if ProjectionDecision == "3Charge"
-            Projection = [("ProjectUp", Site1), ("ProjectUp", Site2), ("ProjectUp", Site3)]
+            Projection = [("ProjUp", Site1), ("ProjUp", Site2), ("ProjUp", Site3)]
         elseif ProjectionDecision == "2Charge"
             Projection = [("ThreeSiteProjectTwoCharge", Site1, Site2, Site3)]
         elseif ProjectionDecision == "1Charge"
             Projection = [("ThreeSiteProjectOneCharge", Site1, Site2, Site3)]
         elseif ProjectionDecision == "0Charge"
-            Projection = [("ProjectDown", Site1), ("ProjectDown", Site2), ("ProjectDown", Site3)]
+            Projection = [("ProjDn", Site1), ("ProjDn", Site2), ("ProjDn", Site3)]
         end
         MPSSys = apply(ITensors.ops(Projection, s), MPSSys, cutoff=tol)
         normalize!(MPSSys)
@@ -236,8 +222,8 @@ function Scramble!(MPSSys::MPS, ScrambleDepth::Int, N::Int, s)
     MPSSys = apply(ITensors.ops(entangleancilla1, s), MPSSys)
     entangleancilla2 = [("CNOT", 1, 2)]
     MPSSys = apply(ITensors.ops(entangleancilla2, s), MPSSys)
-    entangleancilla3 =[("CNOT", 2, 4)]
-    MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
+    #entangleancilla3 =[("CNOT", 2, 4)]
+    #MPSSys = apply(ITensors.ops(entangleancilla3, s), MPSSys)
 
     # Create scramble layer gates
     if ScrambleDepth != 0
@@ -280,13 +266,13 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64, N::Int, ScrambleDepth:
             if iseven(i)
                 for site in 4:3:N
                     if rand() < p
-                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                        push!(MultiSiteMeasurements, (site, site+1, site+2))
                     end
                 end
             else 
                 for site in 2:3:N-2
                     if rand() < p
-                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                        push!(MultiSiteMeasurements, (site, site+1, site+2))
                     end
                 end
             end
@@ -295,13 +281,14 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64, N::Int, ScrambleDepth:
             if iseven(i)
                 for site in 3:3:N-1
                     if rand() < p
-                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                        push!(MultiSiteMeasurements, (site, site+1, site+2))
                     end
                 end
             else 
                 for site in 2:3:N-1
                     if rand() < p
-                        push!(MultiSiteMeasurements, (site, site+1, site+2, site+3))
+                        push!(MultiSiteMeasurements, (site, site+1, site+2))
+                        print("hi")
                     end
                 end
             end
@@ -316,15 +303,15 @@ onecount = 0
 
 let 
     # Tolerance
-    global tol = 5e-5
+    global tol = 1e-150
     # Measurement probabilities
-    global problist = LinRange(0.0, 0.5, 20)
+    global problist = LinRange(0.0, 0.5, 10)
     # Array to hold each size iteration
     global BigEntropyArray = []
     # SE Array
     global BigSEArray = []
     # Array of System Sizes
-    global SystemSizes = [6,8,10]
+    global SystemSizes = [8]
     # How many layers of scrambling (2 -> 1 even 1 odd)
     global ScrambleDepth = 6
     # Variance
@@ -344,7 +331,7 @@ let
         for prob in problist
             # Holds all the entropies for a single p for the amount of trials in a certain system
             entropytrialarray = zeros(ntrials)
-            @time Threads.@threads for i in 1:ntrials
+            @time @Threads.threads for i in 1:ntrials
                 # Create Circuit for N qubitis (N+1) as there is an ancilla
                 Circuit = CreateCircuitAncilla(CircuitDepth, N+1)
                 # Run the monitored circuit 
@@ -451,4 +438,7 @@ xlabel!("p")
 ylabel!("Variance in Entropy")
 title!("CS vs ET Entropy Varaince L = 10")
 png("CS vs ET Entropy Variance  L = 10, 1000 trials, wide")
+
+
+
 

@@ -76,7 +76,6 @@ function VonNeumannEntropy(MPSSys::MPS)
     for n in 1:ITensors.dim(S,1)
         pn = (S[n,n])^2
         entropy -= pn * log(pn)
-        #end
     end
     return entropy
 end

@@ -10,6 +10,7 @@ using StatsBase
 using StaticArrays
 import ITensors: op
 using Distributions
+using JLD2
 
 
 ITensors.op(::OpName"ProjectUp",::SiteType"S=1/2") = [1 0; 0 0]
@@ -100,19 +101,30 @@ function VonNeumannEntropy(MPSSys::MPS)
     return entropy
 end
 
+function HalfSystemCharge(MPSSys::MPS, s)
+    halfsystem = []
+
+    for i in 1:2:(Int(length(MPSSys)/2))
+        push!(halfsystem, (i, i+1))
+    end
+
+    MPSSys, charge = PerformFinalTwoSiteMeasurement!(MPSSys, halfsystem, s)
+    return charge
+end
+
 function CreateCircuit(depth::Int, N::Int)
     Circuit = []
     for i in 1:depth
         if isodd(i)
             oddeventemplayer = []
             for j in 1:2:N-1
-                push!(oddeventemplayer, ("ChargeConservingUnitaryGate", j, j+1))
+                push!(oddeventemplayer, ("ChargeConservingUnitaryGate2", j, j+1))
             end
             push!(Circuit, oddeventemplayer)
         else
             evenoddtemplayer = []
             for j in 2:2:N-2
-                push!(evenoddtemplayer, ("ChargeConservingUnitaryGate", j, j+1))
+                push!(evenoddtemplayer, ("ChargeConservingUnitaryGate2", j, j+1))
             end
             push!(Circuit, evenoddtemplayer)
         end
@@ -133,13 +145,13 @@ function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
         # Computer decides if it gets projected up or down based on probability of down
         if rand() < real.(DensityMatrix[1])
             os = OpSum()
-            os += "ProjectUp", site
+            os += "ProjUp", site
             ProjectUpMPO = MPO(os, s)
             MPSSys = apply(ProjectUpMPO, MPSSys, cutoff=tol)
             addzero()
         else 
             os = OpSum()
-            os += "ProjectDown", site
+            os += "ProjDn", site
             ProjectDownMPO = MPO(os, s)
             MPSSys = apply(ProjectDownMPO, MPSSys, cutoff=tol)
             addone()
@@ -147,6 +159,48 @@ function PerformMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
     end
     noprime!(MPSSys)
     return normalize!(MPSSys)
+end
+
+function PerformFinalTwoSiteMeasurement!(MPSSys::MPS, MeasurementSites::Vector, s)
+    charge = 0
+    for MeasurementTuple in MeasurementSites
+        Site1 = MeasurementTuple[1]
+        Site2 = MeasurementTuple[2]
+        normalize!(MPSSys)
+        orthogonalize!(MPSSys, MeasurementTuple[1])
+
+        MPSSysDagger = prime(dag(MPSSys), linkinds(MPSSys))
+
+        DensityMatrix = prime(MPSSys[Site1], linkinds(MPSSys, Site1-1)) * prime(MPSSysDagger[Site1], s[Site1])
+        DensityMatrix *= prime(MPSSys[Site2],linkinds(MPSSys, Site2)) * prime(MPSSysDagger[Site2], s[Site2])
+        
+        BornProbabilities = []
+        for i = 1:2, j = 1:2
+            push!(BornProbabilities, DensityMatrix[s[Site1] => i, s[Site1]' => i, s[Site2] => j, s[Site2]' => j])
+        end
+        BornProbabilities = real.(BornProbabilities)
+
+        SingleChargeProb = BornProbabilities[2] + BornProbabilities[3]
+
+        items = ["2Charge", "1Charge", "0Charge"]
+        weights = [BornProbabilities[1], SingleChargeProb, BornProbabilities[4]]
+        ProjectionDecision = StatsBase.sample(items, Weights(weights))
+
+        if ProjectionDecision == "2Charge"
+            Projection = [("TwoSiteProjectUp", Site1, Site2)]
+            charge += 2
+        elseif ProjectionDecision == "1Charge"
+            Projection = [("TwoSiteProjectOneCharge", Site1, Site2)]
+            charge += 1
+        elseif ProjectionDecision == "0Charge"
+            Projection = [("TwoSiteProjectDown", Site1, Site2)]
+            charge += 0
+        end
+        MPSSys = apply(ITensors.ops(Projection, s), MPSSys, cutoff=tol)
+        normalize!(MPSSys)
+    end
+    noprime!(MPSSys)
+    return normalize!(MPSSys), charge
 end
 
 function RunMonitoredCircuit(circuit::Vector, p::Float64)
@@ -181,7 +235,7 @@ function RunMonitoredCircuit(circuit::Vector, p::Float64)
         MPSSys = PerformMeasurement!(MPSSys, MeasuringSites, s)
 
     end
-    return MPSSys, VonNeumannEntropy(MPSSys)
+    return MPSSys, VonNeumannEntropy(MPSSys), HalfSystemCharge(MPSSys, s)
 end
 
 zerocount = 0
@@ -191,7 +245,7 @@ tol = 0
 
 let 
     # Tolerance
-    global tol = 1e-4
+    global tol = 1e-150
     # Measurement probabilities
     global problist = LinRange(0, 0.5, 10)
     # Array to hold each size iteration
@@ -199,31 +253,40 @@ let
     # SE Array
     global BigSEArray = []
     # Array of System Sizes
-    global SystemSizes = [8,12]
+    global SystemSizes = [8]
+    # Variance
+    global BigVarArray = []
+    # Charge 
+    global BigChargeVarArray = []
 
     for N in SystemSizes
         # Circuit Depth
         CircuitDepth = 2 * N
         # Number of trials
-        ntrials = 200
+        ntrials = 1000
         # Average Entropy Array per System Size
         AvgEntropyArray = []
         smallSEArray = []
+        SmallVarArray = []
+        SmallChargeVarArray = []
         
         # Entropy fluctuating at some points (Assuming this is because im only running each circuit once) (still fluctuates when averaging)
         for prob in problist
             # Holds all the entropies for a single p for the amount of trials in a certain system
-            entropytrialarray = [] 
-            @time for _ in 1:ntrials   
+            entropytrialarray = zeros(ntrials)
+            chargetrialarray = zeros(ntrials)
+            @time @Threads.threads for i in 1:ntrials   
                 # Create Circuit of size N
                 Circuit = CreateCircuit(CircuitDepth, N)
-                MPSSys, entropy = RunMonitoredCircuit(Circuit, prob)
-                push!(entropytrialarray, entropy)
+                MPSSys, entropy, halfsyscharge = RunMonitoredCircuit(Circuit, prob)
+                entropytrialarray[i] = entropy
+                chargetrialarray[i] = halfsyscharge
             end
             push!(smallSEArray, std(entropytrialarray))
             push!(AvgEntropyArray, mean(entropytrialarray))
+            push!(SmallVarArray, var(entropytrialarray))
+            push!(SmallChargeVarArray, var(chargetrialarray))
         end
-        
         
         # Printing Entropy
         for avgentropy in AvgEntropyArray
@@ -233,18 +296,34 @@ let
         # Bring the entropy array to the array for each system size
         push!(BigEntropyArray, AvgEntropyArray)
         push!(BigSEArray, smallSEArray)
+        push!(BigVarArray, SmallVarArray)
+        push!(BigChargeVarArray, SmallChargeVarArray)
     end
 end
 
-println(zerocount)
-println(onecount)
 
+plot(problist, real.(BigChargeVarArray[1]), label="L=8")
 
-plot(problist, real.(BigEntropyArray[1]), ylim=(-0.5,5), label="L=8")
-plot!(problist, real.(BigEntropyArray[2]), label="L=12")
-xlabel!("Measurement Rate")
+plot(problist, real.(BigEntropyArray[1]), label="L=8")
+plot!(problist, real.(BigEntropyArray[2]), label="L=10")
+xlabel!("Measurement Rate p")
 ylabel!("Average Entropy")
-title!("U(1) Gates; ntrials = 200")
+title!("Bipartate Single-Site Measurements ; ntrials = 1000")
+png("Single Site Measurement, UpDn Setup, Bipartate, 1000 trials")
 
-png("U(1) Gates with 1e-5 Tolerance")
+save_object("L68EntanglementBipartateSingleSiteWideEntropies.jld2", BigEntropyArray)
+save_object("L68EntanglementBipartateSingleSiteWideError.jld2", BigSEArray)
+save_object("L68EntanglementBipartateSingleSiteWideVariance.jld2", BigVarArray)
+save_object("L68EntanglementBipartateSingleSiteProbList.jld2", problist)
 
+plot(problist, real.(BigVarArray[1]), label="L=8")
+plot!(problist, real.(BigVarArray[1]), label="L=8")
+xlabel!("Measurement Rate p")
+ylabel!("Variance in Entropy")
+title!("Bipartate Single-Site Measurements Entropy Variance ; ntrials = 1000")
+png("Single Site Measurement, UpDn Setup, Bipartate,Variance, 1000 trials")
+
+
+for j in 1:2:4
+    print(j)
+end
