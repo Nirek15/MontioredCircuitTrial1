@@ -272,21 +272,17 @@ function RunMonitoredCircuit(CircuitGateLayers::Vector, N::Int, MeasuringLayers:
     for (GateLayer, i) in zip(CircuitGateLayers, 1:length(CircuitGateLayers))
 
         MPSSys = apply(GateLayer, MPSSys, cutoff=tol)
-
-        # Possible Measurement
-        # For each qubit, according to a given probability of measurement, measure it. 
-        if i > ScrambleDepth
-            MPSSys = PerformOneSiteMeasurement!(MPSSys, MeasuringLayers[i], s)
-        end
-        #=
+        
         if i > ScrambleDepth
             if MeasurementType == "One"
                 MPSSys = PerformOneSiteMeasurement!(MPSSys, MeasuringLayers[i], s)
             elseif MeasurementType == "Two"
-                MPSSys = PerformTwoSiteMeasurement!(MPSSys, MeasuringLayers[i], s)
+                MPSSys, uselesscharge = PerformTwoSiteMeasurement!(MPSSys, MeasuringLayers[i], s)
             end
         end
-        =#
+
+        
+        
     end
 
     if SetupType == "Ancilla"
@@ -305,7 +301,7 @@ function SystemMeasurementPositions(ScrambleDepth::Int, TotalCircuitLength::Int,
 
     for i in ScrambleDepth+1:TotalCircuitLength
         if MeasurementType == "One"
-            for site in 2:N+1
+            for site in 1:N
                 if rand() < p
                     push!(MeasuringLayers[i], site)
                 end
@@ -372,23 +368,7 @@ function SetupCircuit(CircuitDepth::Int, ScrambleDepth::Int, N::Int, p::Float64,
         Circuit = CreateCircuitAncilla(TotalCircuitLength, N+1)
 
         # Determine Where Measurements Will Occur
-        print("hi")
         MeasuringLayers = AncillaMeasurementPositions(ScrambleDepth, TotalCircuitLength, N, p, MeasurementType)
-
-
-        #=
-        MeasuringLayers = [[] for _=1:TotalCircuitLength]
-        for i in ScrambleDepth+1:TotalCircuitLength
-            if MeasurementType == "One"
-                for j in 2:N+1
-                    if rand() < p
-                        push!(MeasuringLayers[i], j)
-                    end
-                end
-            end
-        end
-        =#
-
 
         # Without Ancilla
     else
@@ -399,25 +379,15 @@ function SetupCircuit(CircuitDepth::Int, ScrambleDepth::Int, N::Int, p::Float64,
         Circuit = CreateCircuit(TotalCircuitLength, N)
 
         # Determine Where Measurements Will Occur
-        #MeasuringLayers = SystemMeasurementPositions(ScrambleDepth, TotalCircuitLength, N, p, MeasurementType)
-
-        
-        MeasuringLayers = [[] for _=1:TotalCircuitLength]
-        for i in ScrambleDepth+1:TotalCircuitLength
-            for j in 1:N
-                if rand() < p
-                    push!(MeasuringLayers[i], j)
-                end
-            end
-        end
+        MeasuringLayers = SystemMeasurementPositions(ScrambleDepth, TotalCircuitLength, N, p, MeasurementType)
 
     end
 
+    # Create ITensor Gates
     CircuitGateLayers = []
     for GateLayer in Circuit
         push!(CircuitGateLayers, ITensors.ops(GateLayer, s))
     end
-
 
     return CircuitGateLayers, MeasuringLayers, s
 end
@@ -440,21 +410,22 @@ let
     # Measurement probabilities
     global problist = LinRange(0.0, 0.5, 10)
     # Number of Circuits 
-    global NumCircuits = 2
+    global NumCircuits = 10
     # Number of ToleranceTrajectories 
     global NumTrajectories = 10
     # Transition Type ("ET" or "CS")
     global TransitionType = "ET"
     # Ancilla or No Ancilla System ("Ancilla", "System")
-    global SetupType = "System"
+    global SetupType = "Ancilla"
     # Num Site Measurements ("One", "Two", "Three")
-    global MeasurementType = "One"
+    global MeasurementType = "Two"
 
 
     for N in SystemSizes
 
         # Circuit Depth
         CircuitDepth = 2 * N
+        
 
         # How many layers of scrambling (2 -> 1 even 1 odd)
         global ScrambleDepth = N
