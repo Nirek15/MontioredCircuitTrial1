@@ -412,9 +412,9 @@ let
     # Number of Circuits 
     global NumCircuits = 10
     # Number of ToleranceTrajectories 
-    global NumTrajectories = 10
+    global NumTrajectories = 1000
     # Transition Type ("ET" or "CS")
-    global TransitionType = "ET"
+    global TransitionType = "CS"
     # Ancilla or No Ancilla System ("Ancilla", "System")
     global SetupType = "Ancilla"
     # Num Site Measurements ("One", "Two", "Three")
@@ -461,7 +461,7 @@ let
                 # Holds all the entropies for a single p for the amount of trials in a certain system (S is specific)
                 EntropiesForSCircuitSProb = zeros(NumTrajectories)
                 ChargesForSCircuitSProb = zeros(NumTrajectories)
-                @time for i in 1:NumTrajectories
+                @time @Threads.threads for i in 1:NumTrajectories
                     # Run the monitored circuit 
                     MPSSys, entropy, charge = RunMonitoredCircuit(CircuitGateLayers, N, MeasuringLayers, ScrambleDepth, TransitionType, SetupType, MeasurementType, s)
                     # Keep track of entropies since multi-threading
@@ -505,14 +505,14 @@ xlabel!("p")
 ylabel!("Average Entropy")
 
 
-save_object("8GateTrajectoryAverageCSOneSiteWideEntropy.jld2", BigEntropyArray)
-save_object("8GateTrajectoryAverageCSOneSiteWideStandardError.jld2", BigSEArray)
-save_object("8GateTrajectoryAverageCSOneSiteWideEntropyVariance.jld2", BigVarArray)
-save_object("8GateTrajectoryAverageCSOneSiteWideChargeVariance.jld2", BigChargeVarArray)
-save_object("8GateTrajectoryAverageCSOneSiteWideProbList.jld2", problist)
+save_object("Master8GateTrajectoryAverageCSTwoSiteWideEntropy.jld2", BigEntropyArray)
+save_object("Master8GateTrajectoryAverageCSTwoSiteWideStandardError.jld2", BigSEArray)
+save_object("Master8GateTrajectoryAverageCSTwoSiteWideEntropyVariance.jld2", BigVarArray)
+save_object("Master8GateTrajectoryAverageCSTwoSiteWideChargeVariance.jld2", BigChargeVarArray)
+save_object("Master8GateTrajectoryAverageCSTwoSiteWideProbList.jld2", problist)
 
-title!("Ancilla One Site Measurement, CS, N Scrambling Layers; ntrials=1000; Circuits=10")
-png("GateTrajectoryAverage, One Site Entropy, CS, and Ancilla and N-Scrambling 1000 trials 10Circuits")
+title!("Ancilla Two Site Measurement, CS, N Scrambling Layers; ntrials=1000; Circuits=10")
+png("MasterGateTrajectoryAverage, Two Site Entropy, CS, and Ancilla and N-Scrambling 1000 trials 10Circuits")
 
 
 plot(problist, real.(BigVarArray[1]), label="L=8")
@@ -520,16 +520,16 @@ plot!(problist, real.(BigVarArray[2]), label="L=10")
 scatter!(problist, real.(BigVarArray), label="")
 xlabel!("p")
 ylabel!("Variance in Entropy")
-title!("Ancialla One Site, Entropy Variance, CS")
-png("GateTrajectoryAverage Setup, One Site Entropy Variance, CS, and Ancilla and N-Scrambling 1000 trials")
+title!("Ancialla Two Site, Entropy Variance, CS")
+png("MasterGateTrajectoryAverage Setup, Two Site Entropy Variance, CS, and Ancilla and N-Scrambling 1000 trials")
 
 plot(problist, real.(BigChargeVarArray[1]), label="L=8")
 plot!(problist, real.(BigChargeVarArray[2]), label="L=10")
 scatter!(problist, real.(BigChargeVarArray), label="")
 xlabel!("p")
 ylabel!("Variance in Half System Charge")
-title!("Ancilla One Site, HalfSys Charge Variance, CS")
-png("GateTrajectoryAverage Setup, One Site HalfSys Charge Variance, CS, and Ancilla and N-Scrambling 1000 trials 10Circuits")
+title!("Ancilla Two Site, HalfSys Charge Variance, CS")
+png("MasterGateTrajectoryAverage Setup, Two Site HalfSys Charge Variance, CS, and Ancilla and N-Scrambling 1000 trials 10Circuits")
 
 
 #=
